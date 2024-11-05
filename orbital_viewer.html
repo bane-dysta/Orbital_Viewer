@@ -217,6 +217,7 @@
                 this.fileName1 = '';   // 第一个文件名
                 this.fileName2 = '';   // 第二个文件名
                 this.basePath = '';
+                this.showNegative = true; // 改为控制是否显示负值
             }
 
             loadConfiguration(config) {
@@ -487,30 +488,75 @@
                 // 显示第一个文件
                 if (this.currentData1) {
                     this.currentVolumeId1 = this.viewer.addVolumetricData(this.currentData1, "cube", {
-                        isoval: (this.showPositive ? isoValue : -isoValue) / surfaceScale,
+                        isoval: isoValue / surfaceScale,
                         color: this.color1,
                         opacity: 0.85,
                         wireframe: false,
                         origin: this.origin,
                         dimensional: true
                     });
+                    if (this.showNegative) {
+                        // 使用正值颜色的补色作为负值颜色
+                        const negativeColor = this.getComplementaryColor(this.color1);
+                        this.viewer.addVolumetricData(this.currentData1, "cube", {
+                            isoval: -isoValue / surfaceScale,
+                            color: negativeColor,
+                            opacity: 0.85,
+                            wireframe: false,
+                            origin: this.origin,
+                            dimensional: true
+                        });
+
+                    }
                 }
                 
                 // 如果有第二个文件则显示
                 if (this.currentData2) {
                     this.currentVolumeId2 = this.viewer.addVolumetricData(this.currentData2, "cube", {
-                        isoval: (this.showPositive ? isoValue : -isoValue) / surfaceScale,
+                        isoval: isoValue / surfaceScale,
                         color: this.color2,
                         opacity: 0.85,
                         wireframe: false,
                         origin: this.origin,
                         dimensional: true
                     });
+                    if (this.showNegative) {
+                        const negativeColor = this.getComplementaryColor(this.color2);
+                        this.viewer.addVolumetricData(this.currentData2, "cube", {
+                            isoval: -isoValue / surfaceScale,
+                            color: negativeColor,
+                            opacity: 0.85,
+                            wireframe: false,
+                            origin: this.origin,
+                            dimensional: true
+                        });
+                    }
                 }
         
                 this.viewer.render();
             }
 
+            // 获取补色的辅助方法
+            getComplementaryColor(hexColor) {
+                // 移除#号
+                const hex = hexColor.replace('#', '');
+        
+                // 转换为RGB
+                const r = parseInt(hex.substr(0, 2), 16);
+                const g = parseInt(hex.substr(2, 2), 16);
+                const b = parseInt(hex.substr(4, 2), 16);
+        
+                // 计算补色
+                const rComplement = 255 - r;
+                const gComplement = 255 - g;
+                const bComplement = 255 - b;
+        
+                // 转回十六进制
+                return '#' + 
+                    rComplement.toString(16).padStart(2, '0') +
+                    gComplement.toString(16).padStart(2, '0') +
+                    bComplement.toString(16).padStart(2, '0');
+            }
 
             // 显示错误信息
             showError(message) {
@@ -643,8 +689,8 @@
             }
 
             // 切换正负等值面
-            toggleSurfaces() {
-                this.showPositive = !this.showPositive;
+            toggleNegative() {
+                this.showNegative = !this.showNegative;
                 this.updateSurfaces();
             }
 
@@ -677,7 +723,9 @@
                                         </div>
                                     </div>
                                 </div>
-                                <button class="btn" onclick="viewerGroups[${this.id}].toggleSurfaces()">切换正/负等值面</button>
+                                <button class="btn" onclick="viewerGroups[${this.id}].toggleNegative()">
+                                    ${this.showNegative ? '隐藏负值' : '显示负值'}
+                                </button>
                             </div>
                             <div class="viewer" id="viewer-${this.id}"></div>
                         </div>
