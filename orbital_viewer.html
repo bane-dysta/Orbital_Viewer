@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Orbital Loader by wcy</title>
+    <title>Orbital Viewer</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/3Dmol/2.0.3/3Dmol-min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
     <style>
@@ -91,6 +91,7 @@
             cursor: pointer;
             margin: 5px;
             width: 100%;
+            transition: background-color 0.3s;
         }
         .btn:hover {
             background: #45a049;
@@ -165,7 +166,7 @@
 </head>
 <body>
     <div class="container">
-        <h1>多组轨道自动加载查看器</h1>
+        <h1>Orbital Viewer by wcy</h1>
         <!-- 新增配置控制区域 -->
         <div class="config-controls">
             <button class="config-btn" onclick="saveConfiguration()">保存配置</button>
@@ -219,6 +220,9 @@
                 this.basePath = '';
                 this.showNegative = true; // 控制是否显示负值
                 this.isInitialized = false; // 初始化标志
+                this.showCub1 = true;  // 新增：控制 cub1 的显示状态
+                this.showCub2 = true;  // 新增：控制 cub2 的显示状态
+                
             }
             async initialize() {
                 if (this.isInitialized) return;
@@ -232,8 +236,24 @@
                 this.isInitialized = true;
         
                 // 等待DOM完全加载
-        await new Promise(resolve => setTimeout(resolve, 100));
-    }
+            await new Promise(resolve => setTimeout(resolve, 100));
+            }
+
+            // 新增：切换 cub1 显示状态的方法
+            toggleCub1() {
+                this.showCub1 = !this.showCub1;
+                this.updateSurfaces();
+                // 更新按钮文本
+                $(`#toggleCub1-${this.id}`).text(this.showCub1 ? '隐藏 CUB1' : '显示 CUB1');
+            }
+        
+            // 新增：切换 cub2 显示状态的方法
+            toggleCub2() {
+                this.showCub2 = !this.showCub2;
+                this.updateSurfaces();
+                // 更新按钮文本
+                $(`#toggleCub2-${this.id}`).text(this.showCub2 ? '隐藏 CUB2' : '显示 CUB2');
+            }
 
             loadConfiguration(config) {
                 this.title = config.title;
@@ -241,7 +261,9 @@
                 this.color2 = config.color2;
                 this.showPositive = config.showPositive;
                 this.fileName1 = config.fileName1;
-                this.fileName2 = config.fileName2 || ''; // 确保 fileName2 为空字符串而不是 undefined
+                this.fileName2 = config.fileName2 || ''; 
+                this.showCub1 = true;  // 初始化显示状态
+                this.showCub2 = true;  // 初始化显示状态
 
                 $(`#title-${this.id}`).val(config.title);
                 $(`#color1-${this.id}`).val(config.color1);
@@ -253,6 +275,8 @@
                 // 更新文件名显示
                 $(`#file1-label-${this.id}`).text(`文件 1: ${this.fileName1}`);
                 $(`#file2-label-${this.id}`).text(`文件 2: ${this.fileName2 || ''}`);
+
+                // 如果至少有一个文件名，就开始加载
                 if (this.fileName1) {
                     // 使用 setTimeout 确保在 DOM 更新后再加载文件
                     setTimeout(() => this.autoLoadFiles(), 0);
@@ -498,7 +522,7 @@
                 const isoValue = parseFloat($(`#isoValue-${this.id}`).val());
                 
                 // 显示第一个文件
-                if (this.currentData1) {
+                if (this.currentData1 && this.showCub1) {
                     this.currentVolumeId1 = this.viewer.addVolumetricData(this.currentData1, "cube", {
                         isoval: isoValue / surfaceScale,
                         color: this.color1,
@@ -507,23 +531,21 @@
                         origin: this.origin,
                         dimensional: true
                     });
-                    if (this.showNegative) {
-                        // 使用正值颜色的补色作为负值颜色
-                        const negativeColor = this.getComplementaryColor(this.color1);
-                        this.viewer.addVolumetricData(this.currentData1, "cube", {
+
+                    const negativeColor = this.getComplementaryColor(this.color1);
+                    this.viewer.addVolumetricData(this.currentData1, "cube", {
                             isoval: -isoValue / surfaceScale,
                             color: negativeColor,
                             opacity: 0.85,
                             wireframe: false,
                             origin: this.origin,
                             dimensional: true
-                        });
-
-                    }
+                    });
+                    
                 }
                 
                 // 如果有第二个文件则显示
-                if (this.currentData2) {
+                if (this.currentData2 && this.showCub2) {
                     this.currentVolumeId2 = this.viewer.addVolumetricData(this.currentData2, "cube", {
                         isoval: isoValue / surfaceScale,
                         color: this.color2,
@@ -532,19 +554,17 @@
                         origin: this.origin,
                         dimensional: true
                     });
-                    if (this.showNegative) {
-                        const negativeColor = this.getComplementaryColor(this.color2);
-                        this.viewer.addVolumetricData(this.currentData2, "cube", {
+                    const negativeColor = this.getComplementaryColor(this.color2);
+                    this.viewer.addVolumetricData(this.currentData2, "cube", {
                             isoval: -isoValue / surfaceScale,
                             color: negativeColor,
                             opacity: 0.85,
                             wireframe: false,
                             origin: this.origin,
                             dimensional: true
-                        });
-                    }
+                    });
                 }
-        
+                
                 this.viewer.render();
             }
 
@@ -735,9 +755,14 @@
                                         </div>
                                     </div>
                                 </div>
-                                <button class="btn" onclick="viewerGroups[${this.id}].toggleNegative()">
-                                    ${this.showNegative ? '隐藏负值' : '显示负值'}
-                                </button>
+                                <div class="control-group">
+                                    <button class="btn" id="toggleCub1-${this.id}" onclick="viewerGroups[${this.id}].toggleCub1()">
+                                        隐藏 CUB1
+                                    </button>
+                                    <button class="btn" id="toggleCub2-${this.id}" onclick="viewerGroups[${this.id}].toggleCub2()">
+                                        隐藏 CUB2
+                                    </button>
+                                </div>
                             </div>
                             <div class="viewer" id="viewer-${this.id}"></div>
                         </div>
