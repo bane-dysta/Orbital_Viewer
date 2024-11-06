@@ -115,18 +115,42 @@ class OrbitalViewerHandler(http.server.SimpleHTTPRequestHandler):
 def start_server(port=8000):
     """启动服务器"""
     try:
-        # 等待用户输入配置文件路径
         while True:
-            path = input("\n请输入配置文件路径（输入 'exit' 退出）: ").strip()
+            path = input("\n请输入配置文件路径（直接回车进入无配置模式，输入 'exit' 退出）: ").strip()
             
             if path.lower() == 'exit':
                 logging.info("程序即将退出...")
                 sys.exit(0)
             
+            # 处理直接回车的情况
             if not path:
+                # 切换到当前工作目录
+                os.chdir(os.getcwd())
+                logging.info(f"无配置模式启动，工作目录: {os.getcwd()}")
+                
+                # 尝试启动服务器
+                while port < 8100:
+                    try:
+                        httpd = ThreadedHTTPServer(("", port), OrbitalViewerHandler)
+                        logging.info(f"服务器启动在: http://localhost:{port}")
+                        
+                        # 直接打开基础URL
+                        url = f'http://localhost:{port}/'
+                        logging.info(f"正在打开: {url}")
+                        webbrowser.open(url)
+                        
+                        # 运行服务器
+                        httpd.serve_forever()
+                        
+                    except OSError:
+                        logging.warning(f"端口 {port} 被占用，尝试下一个端口")
+                        port += 1
+                    except Exception as e:
+                        logging.error(f"启动服务器时出错: {str(e)}")
+                        break
                 continue
 
-            # 将路径转换为绝对路径
+            # 原有的配置文件处理逻辑
             path = os.path.abspath(path)
             
             if not os.path.exists(path):
