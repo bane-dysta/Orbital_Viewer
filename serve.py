@@ -1,3 +1,4 @@
+# serve.py
 import os
 import sys
 import json
@@ -7,8 +8,8 @@ import socketserver
 import webbrowser
 from pathlib import Path
 from urllib.parse import unquote
-import tempfile
 import logging
+import threading
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
 
@@ -20,58 +21,76 @@ def get_resource_path(relative_path):
         base_path = os.path.abspath(os.path.dirname(__file__))
     return os.path.join(base_path, relative_path)
 
-class OrbitalViewerHandler(http.server.SimpleHTTPRequestHandler):
-    temp_dir = None      # 临时目录路径
-    working_dir = None   # 当前工作目录
-    
-    def end_headers(self):
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Methods', 'GET, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', '*')
-        super().end_headers()
+class ThreadedHTTPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
+    allow_reuse_address = True
 
-    def do_OPTIONS(self):
-        self.send_response(200)
-        self.end_headers()
+class OrbitalViewerHandler(http.server.SimpleHTTPRequestHandler):
+    html_content = None  # 缓存HTML内容
+    
+    def __init__(self, *args, **kwargs):
+        if OrbitalViewerHandler.html_content is None:
+            try:
+                html_path = get_resource_path('orbital_viewer.html')
+                with open(html_path, 'rb') as f:
+                    OrbitalViewerHandler.html_content = f.read().decode('utf-8')
+            except Exception as e:
+                logging.error(f"加载HTML文件失败: {e}")
+                OrbitalViewerHandler.html_content = "Error loading HTML content"
+        super().__init__(*args, **kwargs)
 
     def do_GET(self):
         try:
             path = unquote(self.path)
             
             # 处理主页请求
-            if path == '/' or path == '/index.html':
+            if path.startswith('/?config='):
+                config_name = unquote(path.split('=')[1])
+                logging.info(f"加载配置文件: {config_name}")
+                
+                # 读取配置文件
+                try:
+                    with open(config_name, 'r', encoding='utf-8') as f:
+                        config_data = json.load(f)
+                except Exception as e:
+                    logging.error(f"读取配置文件失败: {e}")
+                    self.send_error(500, f"无法读取配置文件: {str(e)}")
+                    return
+
                 self.send_response(200)
                 self.send_header('Content-type', 'text/html')
                 self.end_headers()
-                # 从资源目录读取HTML文件
-                html_path = get_resource_path('orbital_viewer.html')
-                with open(html_path, 'rb') as f:
-                    self.wfile.write(f.read())
+
+                # 注入配置信息
+                init_script = f"""
+                <script>
+                    window.ORBITAL_VIEWER_CONFIG = {{
+                        configPath: '{config_name}',
+                        configData: {json.dumps(config_data)}
+                    }};
+                </script>
+                """
+                modified_content = OrbitalViewerHandler.html_content.replace('</head>', f'{init_script}</head>')
+                self.wfile.write(modified_content.encode('utf-8'))
                 return
 
-            # 处理.cub文件请求
-            if path.endswith(('.cub', '.cube')):
-                file_name = os.path.basename(path)
-                
-                # 首先在临时目录中查找
-                temp_path = os.path.join(self.temp_dir, file_name)
-                if os.path.exists(temp_path):
-                    self.send_file(temp_path)
-                    return
-                
-                # 然后在工作目录中查找
-                work_path = os.path.join(self.working_dir, file_name)
-                if os.path.exists(work_path):
-                    # 复制到临时目录
-                    shutil.copy2(work_path, temp_path)
-                    self.send_file(temp_path)
-                    return
-                
-                # 找不到文件
-                self.send_error(404, f"File not found: {file_name}")
+            elif path == '/' or path == '/index.html':
+                self.send_response(200)
+                self.send_header('Content-type', 'text/html')
+                self.end_headers()
+                self.wfile.write(OrbitalViewerHandler.html_content.encode('utf-8'))
                 return
+
+            # 处理其他文件请求
+            if path.startswith('/'):
+                file_path = path.lstrip('/')
+                if os.path.exists(file_path):
+                    self.send_file(file_path)
+                    return
+                else:
+                    logging.error(f"文件未找到: {file_path}")
+                    self.send_error(404, f"File not found: {file_path}")
+                    return
             
-            # 其他请求使用默认处理
             super().do_GET()
             
         except Exception as e:
@@ -79,7 +98,6 @@ class OrbitalViewerHandler(http.server.SimpleHTTPRequestHandler):
             self.send_error(500, f"Internal Server Error: {str(e)}")
 
     def send_file(self, filepath):
-        """发送文件到客户端"""
         try:
             with open(filepath, 'rb') as f:
                 self.send_response(200)
@@ -89,38 +107,71 @@ class OrbitalViewerHandler(http.server.SimpleHTTPRequestHandler):
                     self.send_header('Content-type', 'application/octet-stream')
                 self.end_headers()
                 shutil.copyfileobj(f, self.wfile)
+                logging.info(f"成功发送文件: {filepath}")
         except Exception as e:
-            logging.error(f"发送文件时出错: {e}")
+            logging.error(f"发送文件时出错: {filepath} - {e}")
             self.send_error(404, f"File not found: {filepath}")
 
 def start_server(port=8000):
     """启动服务器"""
-    # 创建临时目录
-    temp_dir = tempfile.mkdtemp(prefix='orbital_viewer_')
-    logging.info(f"创建临时目录: {temp_dir}")
-    
-    # 设置处理器的目录
-    OrbitalViewerHandler.temp_dir = temp_dir
-    OrbitalViewerHandler.working_dir = os.getcwd()
-    
     try:
-        # 启动服务器
-        while port < 8100:
-            try:
-                with socketserver.TCPServer(("", port), OrbitalViewerHandler) as httpd:
+        # 等待用户输入配置文件路径
+        while True:
+            path = input("\n请输入配置文件路径（输入 'exit' 退出）: ").strip()
+            
+            if path.lower() == 'exit':
+                logging.info("程序即将退出...")
+                sys.exit(0)
+            
+            if not path:
+                continue
+
+            # 将路径转换为绝对路径
+            path = os.path.abspath(path)
+            
+            if not os.path.exists(path):
+                logging.error(f"文件不存在: {path}")
+                continue
+                
+            if not path.endswith('.json'):
+                logging.error("请输入 JSON 配置文件路径")
+                continue
+
+            # 切换到配置文件所在目录
+            json_dir = os.path.dirname(path)
+            os.chdir(json_dir)
+            logging.info(f"工作目录已切换到: {json_dir}")
+
+            # 获取配置文件名
+            json_name = os.path.basename(path)
+            
+            # 尝试启动服务器
+            while port < 8100:
+                try:
+                    httpd = ThreadedHTTPServer(("", port), OrbitalViewerHandler)
                     logging.info(f"服务器启动在: http://localhost:{port}")
-                    webbrowser.open(f'http://localhost:{port}')
+                    
+                    # 打开浏览器，使用文件名访问配置
+                    url = f'http://localhost:{port}/?config={json_name}'
+                    logging.info(f"正在打开: {url}")
+                    webbrowser.open(url)
+                    
+                    # 运行服务器
                     httpd.serve_forever()
-            except OSError:
-                logging.warning(f"端口 {port} 被占用，尝试下一个端口")
-                port += 1
-            except Exception as e:
-                logging.error(f"启动服务器时出错: {str(e)}")
-                break
+                    
+                except OSError:
+                    logging.warning(f"端口 {port} 被占用，尝试下一个端口")
+                    port += 1
+                except Exception as e:
+                    logging.error(f"启动服务器时出错: {str(e)}")
+                    break
+                    
+    except KeyboardInterrupt:
+        logging.info("用户中断，程序退出...")
+    except Exception as e:
+        logging.error(f"程序出错: {str(e)}")
     finally:
-        # 清理临时目录
-        try:
-            if os.path.exists(temp_dir):
-                shutil.rmtree(temp_dir)
-        except:
-            pass
+        sys.exit(0)
+
+if __name__ == "__main__":
+    start_server()

@@ -436,37 +436,31 @@
                         console.log('文件名未设置:', { fileName1: this.fileName1, fileName2: this.fileName2 });
                         return;
                     }
-        
+            
                     console.log('正在加载文件:', {
-                        basePath: this.basePath,
                         fileName1: this.fileName1,
                         fileName2: this.fileName2
                     });
-        
-                    // 构建完整路径
-                    const fullPath1 = `${this.basePath}${this.fileName1}`;
-                    const fullPath2 = `${this.basePath}${this.fileName2}`;
-        
-                    // 加载文件
-                    const response1 = await fetch(fullPath1);
+            
+                    // 直接使用文件名加载（因为服务器已经在正确的目录下了）
+                    const response1 = await fetch(this.fileName1);
                     if (!response1.ok) {
-                        throw new Error(`无法加载文件 ${fullPath1}: ${response1.status}`);
+                        throw new Error(`无法加载文件 ${this.fileName1}: ${response1.status}`);
                     }
                     this.currentData1 = await response1.text();
-
-                    const response2 = await fetch(fullPath2);
+            
+                    const response2 = await fetch(this.fileName2);
                     if (!response2.ok) {
-                        throw new Error(`无法加载文件 ${fullPath2}: ${response2.status}`);
+                        throw new Error(`无法加载文件 ${this.fileName2}: ${response2.status}`);
                     }
                     this.currentData2 = await response2.text();
-        
-        
+            
                     // 解析和显示
                     this.atomList = this.parseCubeFile(this.currentData1);
                     this.displayMolecule();
                     this.updateSurfaces();
-        
-                    console.log('文件加载成功，加载顺序:', [this.fileName1, this.fileName2]);
+            
+                    console.log('文件加载成功');
                 } catch (error) {
                     console.error('文件加载错误:', error);
                     this.showError(error.message);
@@ -778,14 +772,8 @@
                 const config = JSON.parse(text);
                 
                 // 确定基础路径
-                const jsonFilePath = file.webkitRelativePath || file.name;
-                const BASE_PATH = jsonFilePath.substring(0, jsonFilePath.lastIndexOf('/') + 1) || '';
+                const configPath = file.webkitRelativePath || file.name;
                 
-                console.log('配置加载:', {
-                    jsonPath: jsonFilePath,
-                    basePath: BASE_PATH
-                });
-        
                 // 清除现有查看器组
                 document.getElementById('viewers-container').innerHTML = '';
                 viewerGroups.length = 0;
@@ -815,10 +803,44 @@
             event.target.value = '';
         }
 
-        // 页面加载时创建第一个查看器组
-        $(document).ready(function() {
-            addNewViewerGroup();
+        // 添加 DOMContentLoaded 事件监听器
+        document.addEventListener('DOMContentLoaded', function() {
+            // 检查是否有配置数据
+            if (window.ORBITAL_VIEWER_CONFIG && window.ORBITAL_VIEWER_CONFIG.configData) {
+                console.log('正在加载配置:', window.ORBITAL_VIEWER_CONFIG);
+                const config = window.ORBITAL_VIEWER_CONFIG.configData;
+                
+                // 清除现有查看器组
+                document.getElementById('viewers-container').innerHTML = '';
+                viewerGroups.length = 0;
+
+                // 创建新的查看器组
+                for (const viewerConfig of config.viewers) {
+                    const newGroup = new ViewerGroup(viewerConfig.id);
+                    viewerGroups.push(newGroup);
+                    
+                    // 添加HTML结构
+                    const container = document.getElementById('viewers-container');
+                    container.insertAdjacentHTML('beforeend', newGroup.createHTML());
+                    
+                    // 初始化查看器
+                    newGroup.initialize();
+                    
+                    // 加载配置
+                    newGroup.loadConfiguration(viewerConfig);
+                }
+            } else {
+                // 如果没有配置数据，创建默认的查看器组
+                console.log('没有检测到配置数据，创建默认查看器组');
+                addNewViewerGroup();
+            }
         });
+
+        // 给GPT或Claude看：这些注释掉的不要删，还有用
+        //页面加载时创建第一个查看器组
+        //$(document).ready(function() {
+        //    addNewViewerGroup();
+        //});
     </script>
 </body>
 </html>
