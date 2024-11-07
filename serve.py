@@ -1,8 +1,8 @@
-# serve.py
 import os
 import sys
 import json
 import shutil
+import socket
 import http.server
 import socketserver
 import webbrowser
@@ -13,13 +13,16 @@ import threading
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
 
-def get_resource_path(relative_path):
-    """获取资源文件路径，适用于开发环境和打包后的环境"""
-    if getattr(sys, 'frozen', False):
-        base_path = sys._MEIPASS
-    else:
-        base_path = os.path.abspath(os.path.dirname(__file__))
-    return os.path.join(base_path, relative_path)
+def find_available_port(start_port=8000, max_port=8999):
+    """查找可用的端口"""
+    for port in range(start_port, max_port + 1):
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.bind(('', port))
+                return port
+        except OSError:
+            continue
+    raise RuntimeError("未找到可用端口")
 
 class ThreadedHTTPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     allow_reuse_address = True
@@ -112,90 +115,55 @@ class OrbitalViewerHandler(http.server.SimpleHTTPRequestHandler):
             logging.error(f"发送文件时出错: {filepath} - {e}")
             self.send_error(404, f"File not found: {filepath}")
 
-def start_server(port=8000):
-    """启动服务器"""
+def get_resource_path(relative_path):
+    """获取资源文件路径，适用于开发环境和打包后的环境"""
+    if getattr(sys, 'frozen', False):
+        base_path = sys._MEIPASS
+    else:
+        base_path = os.path.abspath(os.path.dirname(__file__))
+    return os.path.join(base_path, relative_path)
+
+
+def start_viewer_server(config_path=None):
+    """启动查看器服务器"""
     try:
-        while True:
-            path = input("\n请输入配置文件路径（直接回车进入无配置模式，输入 'exit' 退出）: ").strip()
-            
-            if path.lower() == 'exit':
-                logging.info("程序即将退出...")
-                sys.exit(0)
-            
-            # 处理直接回车的情况
-            if not path:
-                # 切换到当前工作目录
-                os.chdir(os.getcwd())
-                logging.info(f"无配置模式启动，工作目录: {os.getcwd()}")
-                
-                # 尝试启动服务器
-                while port < 8100:
-                    try:
-                        httpd = ThreadedHTTPServer(("", port), OrbitalViewerHandler)
-                        logging.info(f"服务器启动在: http://localhost:{port}")
-                        
-                        # 直接打开基础URL
-                        url = f'http://localhost:{port}/'
-                        logging.info(f"正在打开: {url}")
-                        webbrowser.open(url)
-                        
-                        # 运行服务器
-                        httpd.serve_forever()
-                        
-                    except OSError:
-                        logging.warning(f"端口 {port} 被占用，尝试下一个端口")
-                        port += 1
-                    except Exception as e:
-                        logging.error(f"启动服务器时出错: {str(e)}")
-                        break
-                continue
+        # 查找可用端口
+        port = find_available_port()
+        logging.info(f"找到可用端口: {port}")
 
-            # 原有的配置文件处理逻辑
-            path = os.path.abspath(path)
-            
-            if not os.path.exists(path):
-                logging.error(f"文件不存在: {path}")
-                continue
-                
-            if not path.endswith('.json'):
-                logging.error("请输入 JSON 配置文件路径")
-                continue
-
-            # 切换到配置文件所在目录
-            json_dir = os.path.dirname(path)
+        # 如果提供了配置文件，切换到配置文件所在目录
+        if config_path:
+            json_dir = os.path.dirname(os.path.abspath(config_path))
             os.chdir(json_dir)
+            json_name = os.path.basename(config_path)
             logging.info(f"工作目录已切换到: {json_dir}")
+        else:
+            os.chdir(os.getcwd())
+            logging.info(f"无配置模式启动，工作目录: {os.getcwd()}")
 
-            # 获取配置文件名
-            json_name = os.path.basename(path)
+        try:
+            httpd = ThreadedHTTPServer(("", port), OrbitalViewerHandler)
+            logging.info(f"服务器启动在: http://localhost:{port}")
             
-            # 尝试启动服务器
-            while port < 8100:
-                try:
-                    httpd = ThreadedHTTPServer(("", port), OrbitalViewerHandler)
-                    logging.info(f"服务器启动在: http://localhost:{port}")
-                    
-                    # 打开浏览器，使用文件名访问配置
-                    url = f'http://localhost:{port}/?config={json_name}'
-                    logging.info(f"正在打开: {url}")
-                    webbrowser.open(url)
-                    
-                    # 运行服务器
-                    httpd.serve_forever()
-                    
-                except OSError:
-                    logging.warning(f"端口 {port} 被占用，尝试下一个端口")
-                    port += 1
-                except Exception as e:
-                    logging.error(f"启动服务器时出错: {str(e)}")
-                    break
-                    
+            # 构建URL
+            if config_path:
+                url = f'http://localhost:{port}/?config={json_name}'
+            else:
+                url = f'http://localhost:{port}/'
+            
+            logging.info(f"正在打开: {url}")
+            webbrowser.open(url)
+            
+            # 运行服务器
+            httpd.serve_forever()
+                
+        except Exception as e:
+            logging.error(f"启动服务器时出错: {str(e)}")
+                
     except KeyboardInterrupt:
-        logging.info("用户中断，程序退出...")
+        logging.info("服务器已停止...")
     except Exception as e:
-        logging.error(f"程序出错: {str(e)}")
-    finally:
-        sys.exit(0)
+        logging.error(f"发生错误: {str(e)}")
 
 if __name__ == "__main__":
-    start_server()
+    start_viewer_server()
