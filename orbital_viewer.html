@@ -127,12 +127,30 @@
         
         .input-container {
             margin: 8px 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
         
         input[type="number"] {
-            width: 100%;
+            width: 80px;
             padding: 4px;
             margin: 4px 0;
+        }
+        
+        .slider-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .button-row {
+            display: flex;
+            gap: 4px;
+        }
+        
+        .button-row .btn {
+            flex: 1;
         }
         
         .add-viewer-btn {
@@ -203,6 +221,28 @@
 
         .config-btn:hover {
             background: #1976D2;
+        }
+        
+        .screenshot-btn {
+            background: #9c27b0;
+        }
+        
+        .screenshot-btn:hover {
+            background: #7b1fa2;
+        }
+        
+        #screenshot-toast {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #333;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 4px;
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.3s;
         }
 
         @media (max-width: 1200px) {
@@ -301,6 +341,64 @@
                 this.updateSurfaces();
                 // 更新按钮文本
                 $(`#toggleCub2-${this.id}`).text(this.showCub2 ? '隐藏 CUB2' : '显示 CUB2');
+            }
+
+            takeScreenshot() {
+                try {
+                    // 获取查看器的 canvas 元素
+                    const canvas = document.querySelector(`#viewer-${this.id} canvas`);
+                    if (!canvas) {
+                        throw new Error('未找到 canvas 元素');
+                    }
+            
+                    // 创建一个临时的 canvas 来处理截图
+                    const tempCanvas = document.createElement('canvas');
+                    tempCanvas.width = canvas.width;
+                    tempCanvas.height = canvas.height;
+                    const ctx = tempCanvas.getContext('2d');
+                    ctx.fillStyle = 'white';
+                    ctx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+                    ctx.drawImage(canvas, 0, 0);
+            
+                    // 将 canvas 转换为 blob
+                    tempCanvas.toBlob((blob) => {
+                        // 创建一个新的 ClipboardItem
+                        const item = new ClipboardItem({ "image/png": blob });
+                        
+                        // 写入剪贴板
+                        navigator.clipboard.write([item]).then(() => {
+                            this.showToast('截图已复制到剪贴板');
+                        }).catch((err) => {
+                            console.error('复制到剪贴板失败:', err);
+                            this.showError('复制到剪贴板失败');
+                        });
+                    }, 'image/png');
+            
+                } catch (error) {
+                    console.error('截图失败:', error);
+                    this.showError('截图失败');
+                }
+            }
+            
+            // 添加一个新的 toast 提示方法
+            showToast(message) {
+                // 检查是否已存在 toast 元素
+                let toast = document.getElementById('screenshot-toast');
+                if (!toast) {
+                    // 创建新的 toast 元素
+                    toast = document.createElement('div');
+                    toast.id = 'screenshot-toast';
+                    document.body.appendChild(toast);
+                }
+            
+                // 设置消息并显示
+                toast.textContent = message;
+                toast.style.opacity = '1';
+            
+                // 3秒后隐藏
+                setTimeout(() => {
+                    toast.style.opacity = '0';
+                }, 3000);
             }
 
             loadConfiguration(config) {
@@ -783,13 +881,15 @@
                             <div class="viewer-controls">
                                 <div class="control-group">
                                     <div class="input-container">
-                                        <label for="isoValue-${this.id}">等值面值:</label>
-                                        <input type="number" id="isoValue-${this.id}" value="0.002" step="0.001">
+                                        <div>
+                                            <label for="isoValue-${this.id}">等值面值:</label>
+                                            <input type="number" id="isoValue-${this.id}" value="0.002" step="0.001">
+                                        </div>
+                                        <div class="slider-container">
+                                            <label>等值面缩放: <span id="scaleDisplay-${this.id}">2.0</span></label>
+                                            <input type="range" id="surfaceScale-${this.id}" min="0.5" max="5.0" step="0.1" value="2.0">
+                                        </div>
                                     </div>
-                                </div>
-                                <div class="control-group">
-                                    <label for="surfaceScale-${this.id}">等值面缩放: <span id="scaleDisplay-${this.id}">2.0</span></label>
-                                    <input type="range" id="surfaceScale-${this.id}" min="0.5" max="5.0" step="0.1" value="2.0">
                                 </div>
                                 <div class="control-group">
                                     <div class="file-info">
@@ -804,11 +904,16 @@
                                     </div>
                                 </div>
                                 <div class="control-group">
-                                    <button class="btn" id="toggleCub1-${this.id}" onclick="viewerGroups[${this.id}].toggleCub1()">
-                                        隐藏 CUB1
-                                    </button>
-                                    <button class="btn" id="toggleCub2-${this.id}" onclick="viewerGroups[${this.id}].toggleCub2()">
-                                        隐藏 CUB2
+                                    <div class="button-row">
+                                        <button class="btn" id="toggleCub1-${this.id}" onclick="viewerGroups[${this.id}].toggleCub1()">
+                                            隐藏 CUB1
+                                        </button>
+                                        <button class="btn" id="toggleCub2-${this.id}" onclick="viewerGroups[${this.id}].toggleCub2()">
+                                            隐藏 CUB2
+                                        </button>
+                                    </div>
+                                    <button class="btn screenshot-btn" onclick="viewerGroups[${this.id}].takeScreenshot()">
+                                        截图
                                     </button>
                                 </div>
                             </div>
