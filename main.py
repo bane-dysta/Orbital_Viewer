@@ -22,8 +22,9 @@ def print_menu():
     """打印菜单选项"""
     print("1. 快速启动 (无配置模式)")
     print("2. 加载配置文件")
-    print("3. 帮助信息")
-    print("4. 退出程序")
+    print("3. 生成配置文件")  # 新添加的选项
+    print("4. 帮助信息")
+    print("5. 退出程序")
     print("\n直接输入 .json 文件路径可快速启动配置")
     print()
 
@@ -39,6 +40,36 @@ def show_help():
     print("• 可以调整等值面、颜色等参数")
     print("• 支持截图功能")
     print("\n按回车键返回主菜单...")
+    input()
+
+def generate_config_file():
+    """生成配置文件"""
+    clear_screen()
+    print_header()
+    print("请输入要生成配置的文件夹路径：")
+    print("(输入 'back' 返回主菜单)\n")
+    
+    folder_path = input("> ").strip()
+    
+    if folder_path.lower() == 'back':
+        return
+        
+    if not os.path.exists(folder_path):
+        print("\n错误：文件夹不存在")
+        time.sleep(2)
+        return
+        
+    try:
+        from config_write import write_config
+        config_path = write_config(folder_path)
+        print(f"\n配置文件已生成: {config_path}")
+        print("\n是否立即加载该配置？(y/n)")
+        if input().lower().strip() == 'y':
+            start_viewer_server(config_path)
+    except Exception as e:
+        print(f"\n生成配置文件时出错: {str(e)}")
+    
+    print("\n按回车键继续...")
     input()
 
 def process_config_path(path):
@@ -62,7 +93,7 @@ def main():
             print_header()
             print_menu()
             
-            choice = input("请选择操作 (1-4) 或输入配置文件路径: ").strip()
+            choice = input("请选择操作 (1-5) 或输入配置文件路径: ").strip()
             
             # 检查是否直接输入了json路径
             if choice.endswith('.json'):
@@ -90,12 +121,16 @@ def main():
                 
                 if process_config_path(config_path):
                     start_viewer_server(config_path)
+
+            elif choice == '3':  
+                # 生成配置文件
+                generate_config_file()      
             
-            elif choice == '3':
+            elif choice == '4':
                 # 显示帮助
                 show_help()
             
-            elif choice == '4':
+            elif choice == '5':
                 # 退出程序
                 clear_screen()
                 print_header()
