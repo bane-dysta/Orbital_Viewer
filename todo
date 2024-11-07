@@ -1,0 +1,71 @@
+是的！ChemDraw 正是使用了类似的自定义 URL 协议机制。当你在 ChemDraw 中编辑完分子结构，复制到 PPT 后：
+
+文件关联机制：
+
+
+ChemDraw 会在系统中注册 cdx:// 协议
+图片对象会带有类似 cdx://open?file=xxx.cdx 的链接
+
+
+工作流程：
+
+mermaidCopygraph TD
+    A[PPT中双击化学结构图] --> B{系统查找cdx://协议}
+    B --> C[启动ChemDraw]
+    C --> D[打开关联的文件]
+    D --> E[编辑完成后更新PPT中的图像]
+我们可以参考 ChemDraw 的实现方式：
+pythonCopyChemDraw-like Integration for Orbital Viewer点击以打开 code主要优势：
+
+无缝集成：
+
+就像 ChemDraw 一样，双击即可编辑
+保持原始数据的关联
+
+
+数据管理：
+
+配置文件存储在临时目录
+支持相对路径
+
+
+使用简单：
+
+复制/粘贴操作熟悉
+无需手动管理链接
+
+
+更新机制：
+
+编辑后自动更新图像
+维持数据同步
+
+
+
+实现要点：
+
+协议注册：
+
+pythonCopyorbital://open?config=path/to/config.json
+
+剪贴板处理：
+
+
+图像数据（CF_DIB）
+URL链接（CF_TEXT）
+
+
+临时文件管理：
+
+
+使用系统临时目录
+自动清理机制
+
+
+图像更新：
+
+
+保存预览图
+更新PPT中的图像
+
+这样的实现和 ChemDraw 类似，既保证了易用性，又维持了数据的完整性。需要我详细解释某个具体部分吗？
