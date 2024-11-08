@@ -1,0 +1,17 @@
+# 轨道查看器默认配置
+# 可以使用#添加注释
+
+# 第一个轨道的颜色(使用十六进制颜色代码)
+color1 = #4169E1
+
+# 第二个轨道的颜色
+color2 = #DC143C
+
+# 等值面值
+isoValue = 0.003
+
+# 表面缩放比例
+surfaceScale = 2.5
+
+# 是否显示正值(true或false)
+showPositive = true

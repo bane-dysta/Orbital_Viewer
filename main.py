@@ -14,7 +14,7 @@ def clear_screen():
 def print_header():
     """打印程序头部"""
     print("=" * 50)
-    print("        轨道查看器 (Orbital Viewer)")
+    print("        轨道查看器 (Orbital Viewer) by wcy")
     print("=" * 50)
     print()
 
@@ -25,7 +25,7 @@ def print_menu():
     print("3. 生成配置文件")  # 新添加的选项
     print("4. 帮助信息")
     print("5. 退出程序")
-    print("\n直接输入 .json 文件路径可快速启动配置")
+    print("\nTips：直接输入 .json 文件路径可快速启动配置")
     print()
 
 def show_help():
@@ -93,7 +93,7 @@ def main():
             print_header()
             print_menu()
             
-            choice = input("请选择操作 (1-5) 或输入配置文件路径: ").strip()
+            choice = input("请选择操作 (1-5) : ").strip()
             
             # 检查是否直接输入了json路径
             if choice.endswith('.json'):

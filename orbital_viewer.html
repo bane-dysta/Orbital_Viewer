@@ -7,6 +7,25 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/3Dmol/2.0.3/3Dmol-min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
     <style>
+
+        .screenshot-all-btn {
+            background: #9c27b0;
+        }
+        
+        .screenshot-all-btn:hover {
+            background: #7b1fa2;
+        }
+    
+        /* 截图标题样式 */
+        .screenshot-title {
+            font-size: 24px;
+            margin-top: 15px;
+            padding: 10px;
+            text-align: center;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 4px;
+        }
+
         .container {
             width: 95%;
             margin: 0 auto;
@@ -15,7 +34,42 @@
         }
 
         .title-section {
-            margin-bottom: 20px;
+            text-align: center;
+            margin-bottom: 25px;
+            padding: 20px 0;
+            position: relative; /* 添加这一行 */
+        }
+
+        .software-title {
+            font-size: 2.5em;
+            font-weight: bold;
+            margin-bottom: 15px;
+            background: linear-gradient(45deg, #2196F3, #4CAF50);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+            position: relative;
+            display: block;
+            padding: 0 20px;
+        }
+
+        .software-title::after {
+            content: '';
+            position: absolute;
+            bottom: -5px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100px;
+            height: 3px;
+            background: linear-gradient(90deg, transparent, #2196F3, #4CAF50, transparent);
+        }
+
+        .software-author {
+            font-size: 0.9em;
+            color: #666;
+            margin-left: 10px;
+            font-style: italic;
         }
 
         .title-section h1 {
@@ -24,13 +78,27 @@
 
         /* 添加全局标题样式 */
         .global-title {
-            width: 100%;
-            padding: 10px;
-            font-size: 1.2em;
-            margin-bottom: 20px;
+            width: 60%;
+            padding: 10px 15px;
+            font-size: 1.1em;
             border: 1px solid #ddd;
-            border-radius: 4px;
+            border-radius: 25px;
             box-sizing: border-box;
+            margin: 15px auto;
+            text-align: center;
+            transition: all 0.3s ease;
+            background: #fff;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            display: block; /* 添加这一行 */
+            position: relative; /* 添加这一行 */
+        }
+
+        .global-title:focus {
+            outline: none;
+            border-color: #2196F3;
+            box-shadow: 0 2px 10px rgba(33,150,243,0.2);
+            width: 65%;
+            position: relative; /* 添加这一行 */
         }
         
         #viewers-container {
@@ -274,17 +342,27 @@
 <body>
     <div class="container">
         <div class="title-section">
-            <h1>Orbital Viewer by wcy</h1>
+            <h1 class="software-title">
+                Orbital Viewer
+                <span class="software-author">by wcy</span>
+            </h1>
             <input type="text" id="global-title" class="global-title" placeholder="请输入项目标题" value="Orbital Viewer">
         </div>
         <!-- 配置控制区域 -->
         <div class="config-controls">
             <button class="config-btn" onclick="saveConfiguration()">保存配置</button>
+            <!-- 此按钮暂时废弃，但不要删除，以后再做开发 -->
+            <!--
             <div style="display: inline-block;">
+            
                 <input type="file" id="configFileInput" accept=".json" onchange="loadConfiguration(event)" style="display: none;">
                 <button class="config-btn" onclick="document.getElementById('configFileInput').click()">加载配置</button>
             </div>
+            -->
+            <button class="config-btn screenshot-all-btn" onclick="captureAllViewers()">导出截图</button>
         </div>
+        
+
         <div id="viewers-container">
             <!-- 这里会动态添加查看器组 -->
         </div>
@@ -292,6 +370,130 @@
     </div>
 
     <script>
+async function captureAllViewers() {
+    if (viewerGroups.length === 0) {
+        alert('没有可用的轨道组！');
+        return;
+    }
+
+    try {
+        const finalCanvas = document.createElement('canvas');
+        const ctx = finalCanvas.getContext('2d');
+        
+        // 缩放因子
+        const scale = 2;
+        const padding = 40 * scale; // 图片之间的间距
+        const titleHeight = 60 * scale; // 标题区域高度
+        const lineHeight = 2 * scale; // 分割线高度
+        
+        const screenshots = [];
+        let maxWidth = 0;
+        let totalHeight = 0;
+
+        // 获取每个viewer的截图
+        for (let group of viewerGroups) {
+            const canvas = document.querySelector(`#viewer-${group.id} canvas`);
+            if (!canvas) continue;
+
+            // 创建放大的临时画布
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = canvas.width * scale;
+            // 增加顶部和底部空间用于标题和分割线
+            tempCanvas.height = (canvas.height + titleHeight/scale + lineHeight/scale * 2) * scale;
+            const tempCtx = tempCanvas.getContext('2d');
+
+            // 设置背景
+            tempCtx.fillStyle = 'white';
+            tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+
+            // 绘制上方分割线
+            tempCtx.strokeStyle = '#ddd';
+            tempCtx.lineWidth = lineHeight;
+            tempCtx.beginPath();
+            tempCtx.moveTo(0, 0);
+            tempCtx.lineTo(tempCanvas.width, 0);
+            tempCtx.stroke();
+
+            // 添加标题（在上方分割线下）
+            tempCtx.fillStyle = '#333';
+            tempCtx.font = `bold ${24 * scale}px Arial`;
+            tempCtx.textAlign = 'center';
+            tempCtx.textBaseline = 'middle';
+            tempCtx.fillText(group.title, tempCanvas.width / 2, titleHeight / 2);
+
+            // 绘制标题下方分割线
+            tempCtx.beginPath();
+            tempCtx.moveTo(0, titleHeight);
+            tempCtx.lineTo(tempCanvas.width, titleHeight);
+            tempCtx.stroke();
+
+            // 绘制内容
+            tempCtx.save();
+            tempCtx.translate(0, titleHeight + lineHeight);
+            tempCtx.scale(scale, scale);
+            tempCtx.drawImage(canvas, 0, 0);
+            tempCtx.restore();
+
+            // 绘制底部分割线
+            tempCtx.beginPath();
+            tempCtx.moveTo(0, tempCanvas.height - lineHeight);
+            tempCtx.lineTo(tempCanvas.width, tempCanvas.height - lineHeight);
+            tempCtx.stroke();
+
+            screenshots.push({
+                canvas: tempCanvas,
+                width: tempCanvas.width,
+                height: tempCanvas.height
+            });
+
+            maxWidth = Math.max(maxWidth, tempCanvas.width);
+            totalHeight += tempCanvas.height + padding;
+        }
+
+        // 设置最终画布的大小
+        finalCanvas.width = maxWidth;
+        finalCanvas.height = totalHeight;
+
+        // 填充白色背景
+        ctx.fillStyle = 'white';
+        ctx.fillRect(0, 0, finalCanvas.width, finalCanvas.height);
+
+        // 绘制所有截图
+        let currentY = padding / 2; // 添加顶部间距
+        for (let screenshot of screenshots) {
+            const x = (maxWidth - screenshot.width) / 2;
+            ctx.drawImage(screenshot.canvas, x, currentY);
+            currentY += screenshot.height + padding;
+        }
+
+        // 将最终的canvas转换为blob并复制到剪贴板
+        finalCanvas.toBlob(async (blob) => {
+            try {
+                const item = new ClipboardItem({ "image/png": blob });
+                await navigator.clipboard.write([item]);
+                
+                let toast = document.getElementById('screenshot-toast');
+                if (!toast) {
+                    toast = document.createElement('div');
+                    toast.id = 'screenshot-toast';
+                    document.body.appendChild(toast);
+                }
+                toast.textContent = '全局截图已复制到剪贴板';
+                toast.style.opacity = '1';
+                setTimeout(() => {
+                    toast.style.opacity = '0';
+                }, 3000);
+            } catch (err) {
+                console.error('复制到剪贴板失败:', err);
+                alert('复制到剪贴板失败，请检查浏览器权限设置');
+            }
+        }, 'image/png', 1.0);
+
+    } catch (error) {
+        console.error('截图失败:', error);
+        alert('截图过程中出现错误');
+    }
+}
         // 存储所有查看器的数据
         const viewerGroups = [];
         
@@ -315,7 +517,19 @@
                 this.viewer = null;
                 this.currentData1 = null;
                 this.currentData2 = null;
-                this.showPositive = true;
+
+                // 从全局配置获取默认设置
+                const defaultSettings = (window.ORBITAL_VIEWER_CONFIG && window.ORBITAL_VIEWER_CONFIG.defaultSettings) || {
+                    color1: '#0000FF',
+                    color2: '#FF0000',
+                    isoValue: '0.002',
+                    surfaceScale: '2.0',
+                    showPositive: true
+                };
+
+                this.color1 = defaultSettings.color1;
+                this.color2 = defaultSettings.color2;
+                this.showPositive = defaultSettings.showPositive;
                 this.atomList = [];
                 this.origin = { x: 0, y: 0, z: 0 };
                 this.gridVectors = [];
@@ -323,8 +537,6 @@
                 this.currentVolumeId2 = null;
                 this.title = `轨道组 ${id}`;
                 this.uploadedFiles = [];
-                this.color1 = '#0000FF';  // 第一个文件的颜色
-                this.color2 = '#FF0000';   // 第二个文件的颜色
                 this.fileName1 = '';   // 第一个文件名
                 this.fileName2 = '';   // 第二个文件名
                 this.basePath = '';
@@ -896,6 +1108,10 @@
 
             // 创建HTML结构
             createHTML() {
+                const defaultSettings = (window.ORBITAL_VIEWER_CONFIG && window.ORBITAL_VIEWER_CONFIG.defaultSettings) || {
+                    isoValue: '0.002',
+                    surfaceScale: '2.0'
+                };
                 return `
                     <div class="viewer-group" id="group-${this.id}">
                         <input type="text" class="title-input" id="title-${this.id}" value="${this.title}">
@@ -905,11 +1121,11 @@
                                     <div class="input-container">
                                         <div>
                                             <label for="isoValue-${this.id}">等值面值:</label>
-                                            <input type="number" id="isoValue-${this.id}" value="0.002" step="0.001">
+                                            <input type="number" id="isoValue-${this.id}" value="${defaultSettings.isoValue}" step="0.001">
                                         </div>
                                         <div class="slider-container">
-                                            <label>等值面缩放: <span id="scaleDisplay-${this.id}">2.0</span></label>
-                                            <input type="range" id="surfaceScale-${this.id}" min="0.5" max="5.0" step="0.1" value="2.0">
+                                            <label>等值面缩放: <span id="scaleDisplay-${this.id}">${defaultSettings.surfaceScale}</span></label>
+                                            <input type="range" id="surfaceScale-${this.id}" min="0.5" max="5.0" step="0.1" value="${defaultSettings.surfaceScale}">
                                         </div>
                                     </div>
                                 </div>
@@ -917,11 +1133,11 @@
                                     <div class="file-info">
                                         <div class="file-control">
                                             <label class="file-label" id="file1-label-${this.id}">文件 1:</label>
-                                            <input type="color" id="color1-${this.id}" value="#0000FF">
+                                            <input type="color" id="color1-${this.id}" value="${this.color1}">
                                         </div>
                                         <div class="file-control">
                                             <label class="file-label" id="file2-label-${this.id}">文件 2:</label>
-                                            <input type="color" id="color2-${this.id}" value="#FF0000">
+                                            <input type="color" id="color2-${this.id}" value="${this.color2}">
                                         </div>
                                     </div>
                                 </div>

@@ -13,6 +13,34 @@ import threading
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
 
+def load_default_settings():
+    """加载默认设置"""
+    default_settings = {
+        "color1": "#0000FF",
+        "color2": "#FF0000",
+        "isoValue": "0.002",
+        "surfaceScale": "2.0",
+        "showPositive": True
+    }
+    
+    try:
+        default_path = os.path.join(os.path.dirname(__file__), 'default.txt')
+        if not os.path.exists(default_path):
+            return default_settings
+            
+        with open(default_path, 'r', encoding='utf-8') as f:
+            custom_settings = json.load(f)
+            # 合并默认设置和自定义设置
+            default_settings.update(custom_settings)
+            
+        logging.info(f"已加载自定义默认设置: {default_settings}")
+    except Exception as e:
+        logging.warning(f"加载默认设置失败，使用内置默认值: {str(e)}")
+    
+    return default_settings
+
+
+
 def find_available_port(start_port=8000, max_port=8999):
     """查找可用的端口"""
     for port in range(start_port, max_port + 1):
@@ -29,6 +57,7 @@ class ThreadedHTTPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
 
 class OrbitalViewerHandler(http.server.SimpleHTTPRequestHandler):
     html_content = None  # 缓存HTML内容
+    default_settings = None  # 添加默认设置属性
     
     def __init__(self, *args, **kwargs):
         if OrbitalViewerHandler.html_content is None:
@@ -39,6 +68,10 @@ class OrbitalViewerHandler(http.server.SimpleHTTPRequestHandler):
             except Exception as e:
                 logging.error(f"加载HTML文件失败: {e}")
                 OrbitalViewerHandler.html_content = "Error loading HTML content"
+                
+        if OrbitalViewerHandler.default_settings is None:
+            OrbitalViewerHandler.default_settings = load_default_settings()
+            
         super().__init__(*args, **kwargs)
 
     def do_GET(self):
@@ -50,7 +83,6 @@ class OrbitalViewerHandler(http.server.SimpleHTTPRequestHandler):
                 config_name = unquote(path.split('=')[1])
                 logging.info(f"加载配置文件: {config_name}")
                 
-                # 读取配置文件
                 try:
                     with open(config_name, 'r', encoding='utf-8') as f:
                         config_data = json.load(f)
@@ -63,12 +95,30 @@ class OrbitalViewerHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_header('Content-type', 'text/html')
                 self.end_headers()
 
-                # 注入配置信息
+                # 注入配置信息和默认设置
                 init_script = f"""
                 <script>
                     window.ORBITAL_VIEWER_CONFIG = {{
                         configPath: '{config_name}',
-                        configData: {json.dumps(config_data)}
+                        configData: {json.dumps(config_data)},
+                        defaultSettings: {json.dumps(OrbitalViewerHandler.default_settings)}
+                    }};
+                </script>
+                """
+                modified_content = OrbitalViewerHandler.html_content.replace('</head>', f'{init_script}</head>')
+                self.wfile.write(modified_content.encode('utf-8'))
+                return
+
+            elif path == '/' or path == '/index.html':
+                self.send_response(200)
+                self.send_header('Content-type', 'text/html')
+                self.end_headers()
+                
+                # 注入默认设置
+                init_script = f"""
+                <script>
+                    window.ORBITAL_VIEWER_CONFIG = {{
+                        defaultSettings: {json.dumps(OrbitalViewerHandler.default_settings)}
                     }};
                 </script>
                 """
