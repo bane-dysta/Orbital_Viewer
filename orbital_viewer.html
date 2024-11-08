@@ -13,6 +13,25 @@
             padding: 20px;
             font-family: Arial, sans-serif;
         }
+
+        .title-section {
+            margin-bottom: 20px;
+        }
+
+        .title-section h1 {
+            margin-bottom: 10px;
+        }
+
+        /* 添加全局标题样式 */
+        .global-title {
+            width: 100%;
+            padding: 10px;
+            font-size: 1.2em;
+            margin-bottom: 20px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
         
         #viewers-container {
             display: flex;
@@ -254,7 +273,10 @@
 </head>
 <body>
     <div class="container">
-        <h1>Orbital Viewer by wcy</h1>
+        <div class="title-section">
+            <h1>Orbital Viewer by wcy</h1>
+            <input type="text" id="global-title" class="global-title" placeholder="请输入项目标题" value="Orbital Viewer">
+        </div>
         <!-- 配置控制区域 -->
         <div class="config-controls">
             <button class="config-btn" onclick="saveConfiguration()">保存配置</button>
@@ -942,6 +964,7 @@
             const config = {
                 version: "1.0",
                 timestamp: new Date().toISOString(),
+                globalTitle: document.getElementById('global-title').value, // 添加全局标题
                 viewers: viewerGroups.map(group => group.getConfiguration())
             };
 
@@ -970,6 +993,11 @@
                 // 确定基础路径
                 const configPath = file.webkitRelativePath || file.name;
                 
+                if (config.globalTitle) {
+                    document.getElementById('global-title').value = config.globalTitle;
+                    document.title = config.globalTitle; // 更新页面标题
+                }
+
                 // 清除现有查看器组
                 document.getElementById('viewers-container').innerHTML = '';
                 viewerGroups.length = 0;
@@ -999,12 +1027,22 @@
             event.target.value = '';
         }
 
+        document.getElementById('global-title').addEventListener('input', function() {
+            document.title = this.value || 'Orbital Viewer';
+        });
+
         // 添加 DOMContentLoaded 事件监听器
         document.addEventListener('DOMContentLoaded', function() {
             // 检查是否有配置数据
             if (window.ORBITAL_VIEWER_CONFIG && window.ORBITAL_VIEWER_CONFIG.configData) {
                 console.log('正在加载配置:', window.ORBITAL_VIEWER_CONFIG);
                 const config = window.ORBITAL_VIEWER_CONFIG.configData;
+
+                // 设置全局标题
+                if (config.globalTitle) {
+                    document.getElementById('global-title').value = config.globalTitle;
+                    document.title = config.globalTitle;
+                }
                 
                 // 清除现有查看器组
                 document.getElementById('viewers-container').innerHTML = '';
