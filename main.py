@@ -20,7 +20,7 @@ def print_header():
 
 def print_menu():
     """打印菜单选项"""
-    print("1. 快速启动 (无配置模式)")
+    print("1. 快速启动")
     print("2. 加载配置文件")
     print("3. 生成配置文件")  # 新添加的选项
     print("4. 帮助信息")

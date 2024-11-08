@@ -13,6 +13,40 @@ import threading
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
 
+def parse_default_file(file_content):
+    """解析默认配置文件
+    格式示例:
+    color1 = #4169E1
+    color2 = #DC143C
+    isoValue = 0.003
+    surfaceScale = 2.5
+    showPositive = true
+    """
+    settings = {}
+    for line in file_content.splitlines():
+        # 跳过空行和注释行
+        line = line.strip()
+        if not line or line.startswith('#'):
+            continue
+            
+        try:
+            # 分割键值对
+            if '=' in line:
+                key, value = [x.strip() for x in line.split('=', 1)]
+                
+                # 处理布尔值
+                if value.lower() == 'true':
+                    value = True
+                elif value.lower() == 'false':
+                    value = False
+                    
+                settings[key] = value
+        except Exception as e:
+            logging.warning(f"解析配置行失败: {line}, 错误: {str(e)}")
+            continue
+            
+    return settings
+
 def load_default_settings():
     """加载默认设置"""
     default_settings = {
@@ -26,20 +60,43 @@ def load_default_settings():
     try:
         default_path = os.path.join(os.path.dirname(__file__), 'default.txt')
         if not os.path.exists(default_path):
+            logging.info("未找到默认配置文件，使用内置默认值")
             return default_settings
             
         with open(default_path, 'r', encoding='utf-8') as f:
-            custom_settings = json.load(f)
+            custom_settings = parse_default_file(f.read())
+            
+            # 验证并转换数值
+            if 'isoValue' in custom_settings:
+                try:
+                    float(custom_settings['isoValue'])  # 验证是否为有效数字
+                except ValueError:
+                    logging.warning(f"无效的等值面值: {custom_settings['isoValue']}, 使用默认值")
+                    custom_settings.pop('isoValue')
+                    
+            if 'surfaceScale' in custom_settings:
+                try:
+                    float(custom_settings['surfaceScale'])  # 验证是否为有效数字
+                except ValueError:
+                    logging.warning(f"无效的缩放值: {custom_settings['surfaceScale']}, 使用默认值")
+                    custom_settings.pop('surfaceScale')
+                    
+            # 验证颜色格式
+            for color_key in ['color1', 'color2']:
+                if color_key in custom_settings:
+                    color = custom_settings[color_key]
+                    if not color.startswith('#') or len(color) != 7:
+                        logging.warning(f"无效的颜色格式: {color}, 使用默认值")
+                        custom_settings.pop(color_key)
+            
             # 合并默认设置和自定义设置
             default_settings.update(custom_settings)
+            logging.info(f"已加载自定义默认设置: {custom_settings}")
             
-        logging.info(f"已加载自定义默认设置: {default_settings}")
     except Exception as e:
         logging.warning(f"加载默认设置失败，使用内置默认值: {str(e)}")
     
     return default_settings
-
-
 
 def find_available_port(start_port=8000, max_port=8999):
     """查找可用的端口"""
