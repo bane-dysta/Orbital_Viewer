@@ -13,15 +13,42 @@ import threading
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
 
-def parse_default_file(file_content):
-    """解析默认配置文件
-    格式示例:
-    color1 = #4169E1
-    color2 = #DC143C
-    isoValue = 0.003
-    surfaceScale = 2.5
-    showPositive = true
+def get_resource_path(relative_path, check_meipass=True):
+    """获取资源文件路径，适用于开发环境和打包后的环境
+    
+    Args:
+        relative_path: 相对路径
+        check_meipass: 是否检查打包环境路径，对于 default.txt 这种不打包的文件应该设为 False
     """
+    if check_meipass and getattr(sys, 'frozen', False):
+        # 如果是打包后的环境且需要检查打包路径
+        base_path = sys._MEIPASS
+    else:
+        # 开发环境或不检查打包路径 - 使用当前脚本所在目录
+        base_path = os.path.dirname(os.path.abspath(__file__))
+    
+    # 首先尝试在 static 目录下查找
+    static_path = os.path.join(base_path, 'static', relative_path)
+    if os.path.exists(static_path):
+        return static_path
+        
+    # 如果不在 static 目录下，则尝试在根目录下查找
+    root_path = os.path.join(base_path, relative_path)
+    if os.path.exists(root_path):
+        return root_path
+        
+    # 如果是不检查打包路径的情况，还要尝试程序运行目录
+    if not check_meipass:
+        current_dir_path = os.path.join(os.getcwd(), relative_path)
+        if os.path.exists(current_dir_path):
+            return current_dir_path
+        
+    # 添加日志输出来诊断路径问题
+    logging.info(f"尝试加载资源文件: {static_path} 或 {root_path}")
+    return static_path  # 返回 static_path 以保持一致的错误处理
+
+def parse_default_file(file_content):
+    """解析默认配置文件"""
     settings = {}
     for line in file_content.splitlines():
         # 跳过空行和注释行
@@ -53,13 +80,27 @@ def load_default_settings():
         "color1": "#0000FF",
         "color2": "#FF0000",
         "isoValue": "0.002",
-        "surfaceScale": "2.0",
+        "surfaceScale": "1.0",
         "showPositive": True
     }
     
     try:
-        default_path = os.path.join(os.path.dirname(__file__), 'default.txt')
-        if not os.path.exists(default_path):
+        # 修改这里：不使用 get_resource_path，而是直接尝试多个可能的路径
+        possible_paths = [
+            os.path.join(os.getcwd(), 'default.txt'),  # 当前工作目录
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), 'default.txt'),  # 脚本所在目录
+        ]
+        
+        default_file = None
+        default_path = None
+        
+        # 尝试所有可能的路径
+        for path in possible_paths:
+            if os.path.exists(path):
+                default_path = path
+                break
+                
+        if not default_path:
             logging.info("未找到默认配置文件，使用内置默认值")
             return default_settings
             
@@ -113,19 +154,64 @@ class ThreadedHTTPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     allow_reuse_address = True
 
 class OrbitalViewerHandler(http.server.SimpleHTTPRequestHandler):
-    html_content = None  # 缓存HTML内容
-    default_settings = None  # 添加默认设置属性
+    html_content = None
+    css_content = None
+    js_content = None
+    default_settings = None
     
     def __init__(self, *args, **kwargs):
         if OrbitalViewerHandler.html_content is None:
             try:
                 html_path = get_resource_path('orbital_viewer.html')
+                logging.info(f"正在加载HTML文件: {html_path}")
+                if not os.path.exists(html_path):
+                    logging.error(f"HTML文件不存在: {html_path}")
+                    alternative_path = os.path.join(os.path.dirname(__file__), 'orbital_viewer.html')
+                    logging.info(f"尝试备选路径: {alternative_path}")
+                    if os.path.exists(alternative_path):
+                        html_path = alternative_path
+
                 with open(html_path, 'rb') as f:
                     OrbitalViewerHandler.html_content = f.read().decode('utf-8')
             except Exception as e:
                 logging.error(f"加载HTML文件失败: {e}")
                 OrbitalViewerHandler.html_content = "Error loading HTML content"
+
+        # 加载CSS内容
+        if OrbitalViewerHandler.css_content is None:
+            try:
+                css_path = get_resource_path('styles.css')
+                logging.info(f"正在加载CSS文件: {css_path}")
+                if not os.path.exists(css_path):
+                    logging.error(f"CSS文件不存在: {css_path}")
+                    alternative_path = os.path.join(os.path.dirname(__file__), 'styles.css')
+                    logging.info(f"尝试备选路径: {alternative_path}")
+                    if os.path.exists(alternative_path):
+                        css_path = alternative_path
                 
+                with open(css_path, 'rb') as f:
+                    OrbitalViewerHandler.css_content = f.read()
+            except Exception as e:
+                logging.error(f"加载CSS文件失败: {e}")
+                OrbitalViewerHandler.css_content = b""
+
+        if OrbitalViewerHandler.js_content is None:
+            try:
+                js_path = get_resource_path('orbital-viewer.js')
+                logging.info(f"正在加载JS文件: {js_path}")
+                if not os.path.exists(js_path):
+                    logging.error(f"JS文件不存在: {js_path}")
+                    alternative_path = os.path.join(os.path.dirname(__file__), 'orbital-viewer.js')
+                    logging.info(f"尝试备选路径: {alternative_path}")
+                    if os.path.exists(alternative_path):
+                        js_path = alternative_path
+                
+                with open(js_path, 'rb') as f:
+                    OrbitalViewerHandler.js_content = f.read()
+            except Exception as e:
+                logging.error(f"加载JS文件失败: {e}")
+                OrbitalViewerHandler.js_content = b""
+
         if OrbitalViewerHandler.default_settings is None:
             OrbitalViewerHandler.default_settings = load_default_settings()
             
@@ -135,6 +221,21 @@ class OrbitalViewerHandler(http.server.SimpleHTTPRequestHandler):
         try:
             path = unquote(self.path)
             
+            # 处理CSS文件请求
+            if path == '/styles.css':
+                self.send_response(200)
+                self.send_header('Content-type', 'text/css')
+                self.end_headers()
+                self.wfile.write(OrbitalViewerHandler.css_content)
+                return
+
+            if path == '/orbital-viewer.js' or path == '/static/orbital-viewer.js':
+                self.send_response(200)
+                self.send_header('Content-type', 'application/javascript')
+                self.end_headers()
+                self.wfile.write(OrbitalViewerHandler.js_content)
+                return
+
             # 处理主页请求
             if path.startswith('/?config='):
                 config_name = unquote(path.split('=')[1])
@@ -221,15 +322,6 @@ class OrbitalViewerHandler(http.server.SimpleHTTPRequestHandler):
         except Exception as e:
             logging.error(f"发送文件时出错: {filepath} - {e}")
             self.send_error(404, f"File not found: {filepath}")
-
-def get_resource_path(relative_path):
-    """获取资源文件路径，适用于开发环境和打包后的环境"""
-    if getattr(sys, 'frozen', False):
-        base_path = sys._MEIPASS
-    else:
-        base_path = os.path.abspath(os.path.dirname(__file__))
-    return os.path.join(base_path, relative_path)
-
 
 def start_viewer_server(config_path=None):
     """启动查看器服务器"""
