@@ -16,7 +16,7 @@ VSVersionInfo(
         u'080404b0',
         [StringStruct(u'FileDescription', u'Orbital Viewer'),
         StringStruct(u'ProductName', u'Orbital Viewer'),
-        StringStruct(u'ProductVersion', u'1.0.1')])
+        StringStruct(u'ProductVersion', u'1.0.2')])
       ]), 
     VarFileInfo([VarStruct(u'Translation', [2052, 1200])])
   ]

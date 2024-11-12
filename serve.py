@@ -27,6 +27,10 @@ def get_resource_path(relative_path, check_meipass=True):
         # 开发环境或不检查打包路径 - 使用当前脚本所在目录
         base_path = os.path.dirname(os.path.abspath(__file__))
     
+    # 移除路径中多余的 'static' 前缀
+    if relative_path.startswith('static/'):
+        relative_path = relative_path[7:]
+
     # 首先尝试在 static 目录下查找
     static_path = os.path.join(base_path, 'static', relative_path)
     if os.path.exists(static_path):
@@ -221,6 +225,36 @@ class OrbitalViewerHandler(http.server.SimpleHTTPRequestHandler):
         try:
             path = unquote(self.path)
             
+            # 处理 static 目录下的文件请求
+            if path.startswith('/static/'):
+                file_name = os.path.basename(path)  # 获取文件名
+                if file_name == 'styles.css':
+                    self.send_response(200)
+                    self.send_header('Content-type', 'text/css')
+                    self.end_headers()
+                    self.wfile.write(OrbitalViewerHandler.css_content)
+                    return
+                elif file_name == 'orbital-viewer.js':
+                    self.send_response(200)
+                    self.send_header('Content-type', 'application/javascript')
+                    self.end_headers()
+                    self.wfile.write(OrbitalViewerHandler.js_content)
+                    return
+                elif file_name in ['3Dmol-min.js', 'jquery.min.js']:
+                    try:
+                        file_path = get_resource_path(file_name)
+                        with open(file_path, 'rb') as f:
+                            content = f.read()
+                            self.send_response(200)
+                            self.send_header('Content-type', 'application/javascript')
+                            self.end_headers()
+                            self.wfile.write(content)
+                            return
+                    except Exception as e:
+                        logging.error(f"加载文件失败 {file_name}: {e}")
+                        self.send_error(404, f"File not found: {file_name}")
+                        return
+
             # 处理CSS文件请求
             if path == '/styles.css':
                 self.send_response(200)
