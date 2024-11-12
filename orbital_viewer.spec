@@ -7,10 +7,10 @@ a = Analysis(
     pathex=[],
     binaries=[],
     datas=[
-        ('orbital_viewer.html', '.'),  # 包含HTML文件
-        ('serve.py', '.'),            # 包含serve.py
-        ('config_write.py', '.'),     # 包含config_write.py
-        ('main.py', '.')             # 包含main.py
+        ('serve.py', '.'),               # 包含serve.py
+        ('config_write.py', '.'),        # 包含config_write.py
+        ('main.py', '.'),                # 包含main.py
+        ('static', 'static')             # 包含整个static目录
     ],  
     hiddenimports=[],
     hookspath=[],
@@ -23,9 +23,6 @@ a = Analysis(
     noarchive=False,
 )
 
-# 从打包文件列表中移除任何default.txt
-a.datas = [x for x in a.datas if not x[0].endswith('default.txt')]
-
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
 exe = EXE(
@@ -35,7 +32,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name='Orbital Viewer',  # 建议使用更正式的名称
+    name='Orbital Viewer',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -47,5 +44,6 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    version='file_version_info.txt',  # 添加这行，指定版本信息文件
     icon=['viewer.ico'],  # 确保图标文件存在并且路径正确
 )

@@ -21,8 +21,8 @@ def print_header():
 def print_menu():
     """打印菜单选项"""
     print("1. 快速启动")
-    print("2. 加载配置文件")
-    print("3. 生成配置文件")  # 新添加的选项
+    print("2. 加载JSON配置文件")
+    print("3. 生成JSON配置文件")  # 新添加的选项
     print("4. 帮助信息")
     print("5. 退出程序")
     print("\nTips：直接输入 .json 文件路径可快速启动配置")
@@ -32,13 +32,12 @@ def show_help():
     """显示帮助信息"""
     clear_screen()
     print_header()
-    print("帮助信息：")
+    print("简单帮助信息：")
     print("-" * 30)
-    print("• 无配置模式：直接启动查看器，可拖拽 .cube/.cub 文件到界面中")
-    print("• 配置模式：通过 JSON 配置文件加载预设的轨道数据")
-    print("• 支持同时查看多个轨道")
-    print("• 可以调整等值面、颜色等参数")
-    print("• 支持截图功能")
+    print("• 快速启动：直接启动查看器，可拖拽 .cube/.cub 文件到查看器窗口")
+    print("• 配置模式：通过 JSON 配置文件加载预设的轨道数据，需要对应 cub 文件与 JSON 配置文件在同一目录下")
+    print("• 生成配置：输入包含cub文件的文件夹路径，按照默认设置生成 JSON 配置文件")
+    print("• 访问 https://bane-dysta.github.io/posts/OViewer/ 获取详细介绍")
     print("\n按回车键返回主菜单...")
     input()
 
