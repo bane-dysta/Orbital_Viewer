@@ -1,0 +1,30 @@
+{
+  "version": "3",
+  "name": "orbital-viewer",
+  "services": {
+    "orbital-viewer": {
+      "build": {
+        "context": ".",
+        "dockerfile": "Dockerfile"
+      },
+      "container_name": "orbital-viewer",
+      "ports": [
+        "8000-8999:8000-8999"
+      ],
+      "volumes": [
+        "./data:/app/data",
+        "./config:/app/config"
+      ],
+      "environment": [
+        "TZ=Asia/Shanghai"
+      ],
+      "restart": "unless-stopped",
+      "cap_add": [
+        "SYS_ADMIN"
+      ],
+      "devices": [
+        "/dev/dri:/dev/dri"
+      ]
+    }
+  }
+}
