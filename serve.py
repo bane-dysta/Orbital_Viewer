@@ -13,6 +13,19 @@ import threading
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
 
+def get_local_ip():
+    """获取本机的局域网IP地址"""
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        # 不需要真实连接
+        s.connect(('10.255.255.255', 1))
+        IP = s.getsockname()[0]
+    except Exception:
+        IP = '127.0.0.1'
+    finally:
+        s.close()
+    return IP
+
 def get_resource_path(relative_path, check_meipass=True):
     """获取资源文件路径，适用于开发环境和打包后的环境
     
@@ -148,7 +161,8 @@ def find_available_port(start_port=8000, max_port=8999):
     for port in range(start_port, max_port + 1):
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.bind(('', port))
+                # 明确绑定到所有接口
+                s.bind(('0.0.0.0', port))
                 return port
         except OSError:
             continue
@@ -362,7 +376,11 @@ def start_viewer_server(config_path=None):
     try:
         # 查找可用端口
         port = find_available_port()
+        
+        # 获取本机IP地址
+        local_ip = get_local_ip()
         logging.info(f"找到可用端口: {port}")
+        logging.info(f"本机IP地址: {local_ip}")
 
         # 如果提供了配置文件，切换到配置文件所在目录
         if config_path:
@@ -375,8 +393,10 @@ def start_viewer_server(config_path=None):
             logging.info(f"无配置模式启动，工作目录: {os.getcwd()}")
 
         try:
-            httpd = ThreadedHTTPServer(("", port), OrbitalViewerHandler)
-            logging.info(f"服务器启动在: http://localhost:{port}")
+            # 明确绑定到所有接口
+            httpd = ThreadedHTTPServer(("0.0.0.0", port), OrbitalViewerHandler)
+            logging.info(f"本地访问地址: http://localhost:{port}")
+            logging.info(f"局域网访问地址: http://{local_ip}:{port}")
             
             # 构建URL
             if config_path:
@@ -384,7 +404,7 @@ def start_viewer_server(config_path=None):
             else:
                 url = f'http://localhost:{port}/'
             
-            logging.info(f"正在打开: {url}")
+            logging.info(f"正在浏览器中打开本地地址...")
             webbrowser.open(url)
             
             # 运行服务器
