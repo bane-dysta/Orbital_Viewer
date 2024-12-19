@@ -1,14 +1,2 @@
-build/orbital_viewer/Analysis-00.toc
-build/orbital_viewer/base_library.zip
-build/orbital_viewer/EXE-00.toc
-build/orbital_viewer/Orbital loader.pkg
-build/orbital_viewer/PKG-00.toc
-build/orbital_viewer/PYZ-00.pyz
-build/orbital_viewer/PYZ-00.toc
-build/orbital_viewer/warn-orbital_viewer.txt
-build/orbital_viewer/xref-orbital_viewer.html
-build/orbital_viewer/localpycs/pyimod01_archive.pyc
-build/orbital_viewer/localpycs/pyimod02_importers.pyc
-build/orbital_viewer/localpycs/pyimod03_ctypes.pyc
-build/orbital_viewer/localpycs/pyimod04_pywin32.pyc
-build/orbital_viewer/localpycs/struct.pyc
+build
+dist
