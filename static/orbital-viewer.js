@@ -1241,9 +1241,9 @@ async function captureAllViewers() {
         // 缩放因子和间距
         const scale = 2;
         const padding = 40 * scale;
-        const titleHeight = 60 * scale;
+        const titleHeight = 80 * scale;
         const lineHeight = 2 * scale;
-        const notesLineHeight = 24 * scale; // 备注的行高
+        const notesLineHeight = 36 * scale; // 备注的行高
         const maxNotesLines = 5; // 最大显示5行备注
         const notesHeight = notesLineHeight * maxNotesLines; // 备注区域高度
 
@@ -1286,7 +1286,7 @@ async function captureAllViewers() {
 
             // 添加标题
             tempCtx.fillStyle = '#333';
-            tempCtx.font = `bold ${24 * scale}px Arial`;
+            tempCtx.font = `bold ${64 * scale}px Arial`;
             tempCtx.textAlign = 'center';
             tempCtx.textBaseline = 'middle';
             tempCtx.fillText(title, tempCanvas.width / 2, titleHeight / 2);
@@ -1299,7 +1299,7 @@ async function captureAllViewers() {
 
             // 添加备注
             if (notes) {
-                tempCtx.font = `${16 * scale}px Arial`;
+                tempCtx.font = `${36 * scale}px Arial`;
                 tempCtx.fillStyle = '#666';
                 tempCtx.textAlign = 'left';
                 
@@ -1347,12 +1347,6 @@ async function captureAllViewers() {
             tempCtx.scale(scale, scale);
             tempCtx.drawImage(canvas, 0, 0);
             tempCtx.restore();
-
-            // 绘制底部分割线
-            tempCtx.beginPath();
-            tempCtx.moveTo(0, tempCanvas.height - lineHeight);
-            tempCtx.lineTo(tempCanvas.width, tempCanvas.height - lineHeight);
-            tempCtx.stroke();
 
             screenshots.push({
                 canvas: tempCanvas,
