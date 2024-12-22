@@ -22,7 +22,7 @@ def print_menu():
     """打印菜单选项"""
     print("1. 快速启动")
     print("2. 加载JSON配置文件")
-    print("3. 生成JSON配置文件")  # 新添加的选项
+    print("3. 生成JSON配置文件")
     print("4. 帮助信息")
     print("5. 退出程序")
     print("\nTips：直接输入 .json 文件路径可快速启动配置")

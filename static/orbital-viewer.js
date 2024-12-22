@@ -1,3 +1,94 @@
+// NotesManager 类 - 处理轨道组备注功能
+class NotesManager {
+    constructor(groupId) {
+        this.groupId = groupId;
+        this.notes = '';
+        // 延迟设置事件监听器，等待 DOM 加载完成
+        setTimeout(() => this.setupEventListeners(), 0);
+    }
+
+    // 初始化备注区域
+    initialize() {
+        const notesArea = document.getElementById(`notes-${this.groupId}`);
+        if (notesArea) {
+            notesArea.value = this.notes;
+            this.setupEventListeners();
+        }
+    }
+
+    // 设置备注内容
+    setNotes(notes) {
+        this.notes = notes || '';
+        const notesArea = document.getElementById(`notes-${this.groupId}`);
+        if (notesArea) {
+            notesArea.value = this.notes;
+            // 触发 input 事件以调整高度
+            const event = new Event('input', {
+                bubbles: true,
+                cancelable: true,
+            });
+            notesArea.dispatchEvent(event);
+        }
+    }
+
+    // 获取备注内容
+    getNotes() {
+        return this.notes;
+    }
+
+    // 设置事件监听器
+    setupEventListeners() {
+        const notesArea = document.getElementById(`notes-${this.groupId}`);
+        if (notesArea) {
+            // 移除现有的事件监听器
+            const newNotesArea = notesArea.cloneNode(true);
+            notesArea.parentNode.replaceChild(newNotesArea, notesArea);
+
+            // 添加新的事件监听器
+            newNotesArea.addEventListener('input', (e) => {
+                this.notes = e.target.value;
+                this.saveToLocalStorage();
+            });
+
+            // 自动调整文本区域高度
+            newNotesArea.addEventListener('input', function() {
+                this.style.height = 'auto';
+                this.style.height = (this.scrollHeight) + 'px';
+            });
+        }
+    }
+
+    // 保存到本地存储
+    saveToLocalStorage() {
+        const key = `orbital-viewer-notes-${this.groupId}`;
+        localStorage.setItem(key, this.notes);
+    }
+
+    // 从本地存储加载
+    loadFromLocalStorage() {
+        const key = `orbital-viewer-notes-${this.groupId}`;
+        const savedNotes = localStorage.getItem(key);
+        if (savedNotes) {
+            this.setNotes(savedNotes);
+        }
+    }
+
+    // 获取配置数据
+    getConfiguration() {
+        return {
+            notes: this.notes
+        };
+    }
+
+    // 加载配置数据
+    loadConfiguration(config) {
+        if (config && (typeof config === 'string' || config.notes)) {
+            const notesContent = typeof config === 'string' ? config : config.notes;
+            this.setNotes(notesContent);
+        }
+    }
+}
+
 // 定义全局变量、常量和配置对象
 // 存储所有查看器的数据
 const viewerGroups = [];
@@ -30,7 +121,7 @@ function generateIsoSurface(cubeData, isoValue) {
         const ny = parseInt(lines[4].trim().split(/\s+/)[0]);
         const nz = parseInt(lines[5].trim().split(/\s+/)[0]);
         
-        // 创建三维数组存储体素数据
+        // 创建三维数组存体素数据
         const voxels = new Float32Array(nx * ny * nz);
         
         // 跳过头部信息，读取体素数据
@@ -186,7 +277,7 @@ class ViewerGroup {
         document.querySelector(`#group-${this.id} #${tabName}-tab-${this.id}`).classList.add('active');
     }
 
-    // 添加切换染色模式的方法
+    // 添加切换染色模式的��法
     toggleColorMapping() {
         this.isColorMappingEnabled = !this.isColorMappingEnabled;
         
@@ -217,7 +308,7 @@ class ViewerGroup {
                 throw new Error('找不到 canvas 元素');
             }
 
-            // 创建一个��� canvas 来处理截图
+            // 创建一个新的 canvas 来处理截图
             const tempCanvas = document.createElement('canvas');
             tempCanvas.width = canvas.width;
             tempCanvas.height = canvas.height;
@@ -662,7 +753,7 @@ class ViewerGroup {
         const gComplement = 255 - g;
         const bComplement = 255 - b;
 
-        // 转回十六进制
+        // 转回十进制
         return '#' +
             rComplement.toString(16).padStart(2, '0') +
             gComplement.toString(16).padStart(2, '0') +
@@ -795,7 +886,7 @@ class ViewerGroup {
                 // 整键长判断标准，用共价半径之和的1.3倍作为阈值
                 if (distance < (radius1 + radius2) * 1.3) {
                     // 根据原子大小调整键的粗细
-                    const bondRadius = Math.min(radius1, radius2) * 0.25;  // 键的径设��较小原子半径的1/4
+                    const bondRadius = Math.min(radius1, radius2) * 0.25;  // 键的径设较小原子半径的1/4
                     
                     this.viewer.addCylinder({
                         start: { x: atom1.x, y: atom1.y, z: atom1.z },
@@ -1024,7 +1115,7 @@ class ViewerGroup {
                     isoValueInput.id = `isoValue-${newId}`;
                 }
                 
-                // 更新关闭按钮的 onclick 事件
+                // 更新关闭按钮的 onclick ��件
                 const closeBtn = element.querySelector('.close-btn');
                 if (closeBtn) {
                     closeBtn.setAttribute('onclick', `viewerGroups[${newId}].close()`);
@@ -1152,8 +1243,11 @@ async function captureAllViewers() {
         const padding = 40 * scale;
         const titleHeight = 60 * scale;
         const lineHeight = 2 * scale;
+        const notesLineHeight = 24 * scale; // 备注的行高
+        const maxNotesLines = 5; // 最大显示5行备注
+        const notesHeight = notesLineHeight * maxNotesLines; // 备注区域高度
 
-        // 获取所有有的截图
+        // 获取所有有效的截图
         const screenshots = [];
         let maxWidth = 0;
         let maxHeight = 0;
@@ -1168,10 +1262,14 @@ async function captureAllViewers() {
             const titleInput = element.querySelector('.title-input');
             const title = titleInput ? titleInput.value : '';
 
-            // 创建放大的临画布
+            // 获取备注内容
+            const notesArea = element.querySelector('.notes-area');
+            const notes = notesArea ? notesArea.value : '';
+
+            // 创建放大的临时画布
             const tempCanvas = document.createElement('canvas');
             tempCanvas.width = canvas.width * scale;
-            tempCanvas.height = (canvas.height + titleHeight / scale + lineHeight / scale * 2) * scale;
+            tempCanvas.height = (canvas.height + titleHeight + notesHeight + lineHeight * 3) * scale;
             const tempCtx = tempCanvas.getContext('2d');
 
             // 设置背景
@@ -1199,14 +1297,58 @@ async function captureAllViewers() {
             tempCtx.lineTo(tempCanvas.width, titleHeight);
             tempCtx.stroke();
 
+            // 添加备注
+            if (notes) {
+                tempCtx.font = `${16 * scale}px Arial`;
+                tempCtx.fillStyle = '#666';
+                tempCtx.textAlign = 'left';
+                
+                // 自动换行显示备注
+                const words = notes.split(' ');
+                let line = '';
+                let y = titleHeight + notesLineHeight;
+                let lineCount = 0;
+                
+                for (let i = 0; i < words.length && lineCount < maxNotesLines; i++) {
+                    const testLine = line + words[i] + ' ';
+                    const metrics = tempCtx.measureText(testLine);
+                    const testWidth = metrics.width;
+
+                    if (testWidth > tempCanvas.width - 40 * scale && i > 0) {
+                        // 如果是最后一行且还有更多内容，添加省略号
+                        if (lineCount === maxNotesLines - 1 && i < words.length - 1) {
+                            tempCtx.fillText(line + '...', 20 * scale, y);
+                        } else {
+                            tempCtx.fillText(line, 20 * scale, y);
+                        }
+                        line = words[i] + ' ';
+                        y += notesLineHeight;
+                        lineCount++;
+                    } else {
+                        line = testLine;
+                    }
+                }
+                
+                // 绘制最后一行
+                if (line && lineCount < maxNotesLines) {
+                    tempCtx.fillText(line, 20 * scale, y);
+                }
+            }
+
+            // 绘制备注下方分割线
+            tempCtx.beginPath();
+            tempCtx.moveTo(0, titleHeight + notesHeight + lineHeight);
+            tempCtx.lineTo(tempCanvas.width, titleHeight + notesHeight + lineHeight);
+            tempCtx.stroke();
+
             // 绘制内容
             tempCtx.save();
-            tempCtx.translate(0, titleHeight + lineHeight);
+            tempCtx.translate(0, titleHeight + notesHeight + lineHeight * 2);
             tempCtx.scale(scale, scale);
             tempCtx.drawImage(canvas, 0, 0);
             tempCtx.restore();
 
-            // 绘制底部割线
+            // 绘制底部分割线
             tempCtx.beginPath();
             tempCtx.moveTo(0, tempCanvas.height - lineHeight);
             tempCtx.lineTo(tempCanvas.width, tempCanvas.height - lineHeight);
@@ -1252,7 +1394,7 @@ async function captureAllViewers() {
             }
         }
 
-        // 将最终的canvas转换为blob并复制到剪贴���
+        // 将最终的canvas转换为blob并复制到剪贴板
         finalCanvas.toBlob(async (blob) => {
             try {
                 const item = new ClipboardItem({ "image/png": blob });
@@ -1331,7 +1473,7 @@ document.getElementById('global-title').addEventListener('input', function () {
     document.title = this.value || 'Orbital Viewer';
 });
 
-// 添加 DOMContentLoaded 事件监听器
+// 添加 DOMContentLoaded 件监听器
 document.addEventListener('DOMContentLoaded', function () {
     // 检查是否有配置数据
     if (window.ORBITAL_VIEWER_CONFIG && window.ORBITAL_VIEWER_CONFIG.configData) {
@@ -1401,7 +1543,7 @@ function switchTab(groupId, tabName) {
     tabBtns.forEach(btn => btn.classList.remove('active'));
     tabContents.forEach(content => content.classList.remove('active'));
     
-    // 添加active类到选中的选项卡
+    // 添加active类到选中的选项��
     document.querySelector(`#group-${groupId} .tab-btn[data-tab="${tabName}"]`).classList.add('active');
     document.querySelector(`#group-${groupId} #${tabName}-tab-${groupId}`).classList.add('active');
 }
