@@ -11,9 +11,13 @@ const atomColors = {
 };
 
 const covalentRadii = {
-    'H': 0.31, 'C': 0.76, 'N': 0.71, 'O': 0.66, 'F': 0.57,
-    'Cl': 1.02, 'Br': 1.20, 'I': 1.39, 'He': 0.28, 'Ne': 0.58,
-    'Ar': 1.06, 'Kr': 1.16, 'Xe': 1.40
+    'H': 0.31, 'He': 0.28,
+    'Li': 1.28, 'Be': 0.96, 'B': 0.84, 'C': 0.76, 'N': 0.71, 'O': 0.66, 'F': 0.57, 'Ne': 0.58,
+    'Na': 1.66, 'Mg': 1.41, 'Al': 1.21, 'Si': 1.11, 'P': 1.07, 'S': 1.05, 'Cl': 1.02, 'Ar': 1.06,
+    'K': 2.03, 'Ca': 1.76, 'Sc': 1.70, 'Ti': 1.60, 'V': 1.53, 'Cr': 1.39, 'Mn': 1.39, 'Fe': 1.32,
+    'Co': 1.26, 'Ni': 1.24, 'Cu': 1.32, 'Zn': 1.22, 'Ga': 1.22, 'Ge': 1.20, 'As': 1.19, 'Se': 1.20,
+    'Br': 1.20, 'Kr': 1.16,
+    'I': 1.39, 'Xe': 1.40
 };
 
 // 修改 generateIsoSurface 函数
@@ -124,7 +128,6 @@ class ViewerGroup {
         this.setupDropZone();
         this.isInitialized = true;
 
-        // 等待DOM完全加载
         await new Promise(resolve => setTimeout(resolve, 100));
     }
 
@@ -268,6 +271,10 @@ class ViewerGroup {
 
         ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
             viewerEl.addEventListener(eventName, (e) => {
+                // 如果在排序模式下，阻止所有文件拖放相关事件
+                if (isDraggingEnabled) {
+                    return;
+                }
                 e.preventDefault();
                 e.stopPropagation();
             }, false);
@@ -275,6 +282,10 @@ class ViewerGroup {
 
         ['dragenter', 'dragover'].forEach(eventName => {
             viewerEl.addEventListener(eventName, () => {
+                // 在排序模式下不显示拖放区域
+                if (isDraggingEnabled) {
+                    return;
+                }
                 dropZone.classList.add('active');
             }, false);
         });
@@ -285,8 +296,11 @@ class ViewerGroup {
             }, false);
         });
 
-        // 修改文件拖放处理
         viewerEl.addEventListener('drop', (e) => {
+            // 在排序模式下不处理文件拖放
+            if (isDraggingEnabled) {
+                return;
+            }
             const files = Array.from(e.dataTransfer.files)
                 .filter(file => file.name.endsWith('.cube') || file.name.endsWith('.cub'));
 
@@ -607,8 +621,13 @@ class ViewerGroup {
 
     // 获取元素符号
     getElementSymbol(atomicNumber) {
-        const elements = ["H", "He", "Li", "Be", "B", "C", "N", "O", "F", "Ne",
-            "Na", "Mg", "Al", "Si", "P", "S", "Cl", "Ar"];
+        const elements = [
+            "H", "He", 
+            "Li", "Be", "B", "C", "N", "O", "F", "Ne",
+            "Na", "Mg", "Al", "Si", "P", "S", "Cl", "Ar",
+            "K", "Ca", "Sc", "Ti", "V", "Cr", "Mn", "Fe", "Co", "Ni", "Cu", "Zn", "Ga", "Ge", "As", "Se", "Br", "Kr",
+            "Rb", "Sr", "Y", "Zr", "Nb", "Mo", "Tc", "Ru", "Rh", "Pd", "Ag", "Cd", "In", "Sn", "Sb", "Te", "I", "Xe"
+        ];
         return elements[atomicNumber - 1] || "X";
     }
 
@@ -622,20 +641,25 @@ class ViewerGroup {
 
     // 获取共价半径
     getCovalentRadius(element) {
-        return covalentRadii[element] || 1.0;
+        return covalentRadii[element] || 0.76;  // 默认返回碳原子的半径
     }
 
     // 显示分子结构
     displayMolecule() {
         if (!this.viewer || this.atomList.length === 0) return;
 
+        // 设置基准比例因子，用于调整整体大小
+        const RADIUS_SCALE = 0.4;  // 可以调整这个值来改变整体大小
+
         // 添加原子
-        const ATOM_SIZE = 0.4;
         this.atomList.forEach(atom => {
             const color = atomColors[atom.elem] || '#808080';
+            // 使用共价半径来设置原子大小
+            const radius = (covalentRadii[atom.elem] || 0.76) * RADIUS_SCALE;  // 默认使用碳原子的半径
+            
             this.viewer.addSphere({
                 center: { x: atom.x, y: atom.y, z: atom.z },
-                radius: ATOM_SIZE,
+                radius: radius,
                 color: color
             });
         });
@@ -650,11 +674,15 @@ class ViewerGroup {
                 const radius1 = this.getCovalentRadius(atom1.elem);
                 const radius2 = this.getCovalentRadius(atom2.elem);
 
+                // 调整键长判断标准，使用共价半径之和的1.3倍作为阈值
                 if (distance < (radius1 + radius2) * 1.3) {
+                    // 根据原子大小调整键的粗细
+                    const bondRadius = Math.min(radius1, radius2) * 0.25;  // 键的半径设为较小原子半径的1/4
+                    
                     this.viewer.addCylinder({
                         start: { x: atom1.x, y: atom1.y, z: atom1.z },
                         end: { x: atom2.x, y: atom2.y, z: atom2.z },
-                        radius: 0.1,
+                        radius: bondRadius,
                         fromCap: true,
                         toCap: true,
                         color: 'lightgray'
@@ -680,61 +708,249 @@ class ViewerGroup {
             surfaceScale: '2.0'
         };
         return `
-                    <div class="viewer-group" id="group-${this.id}">
-                        <input type="text" class="title-input" id="title-${this.id}" value="${this.title}">
-                        <div class="viewer-container">
-                            <div class="viewer-controls">
-                                <div class="control-group">
-                                    <div class="input-container">
-                                        <div>
-                                            <label for="isoValue-${this.id}">等值面值:</label>
-                                            <input type="number" id="isoValue-${this.id}" value="${defaultSettings.isoValue}" step="0.001">
-                                        </div>
-                                        <div class="slider-container">
-                                            <label>等值面缩放: <span id="scaleDisplay-${this.id}">${defaultSettings.surfaceScale}</span></label>
-                                            <input type="range" id="surfaceScale-${this.id}" min="0.5" max="5.0" step="0.1" value="${defaultSettings.surfaceScale}">
-                                        </div>
-                                    </div>
+            <div class="viewer-group" id="group-${this.id}" draggable="false">
+                <div class="viewer-header">
+                    <input type="text" class="title-input" id="title-${this.id}" value="${this.title}">
+                    <div class="close-btn-container">
+                        <button class="close-btn" onclick="viewerGroups[${this.id}].close()">×</button>
+                    </div>
+                </div>
+                <div class="viewer-container">
+                    <div class="viewer-controls">
+                        <div class="control-group">
+                            <div class="input-container">
+                                <div>
+                                    <label for="isoValue-${this.id}">等值面值:</label>
+                                    <input type="number" id="isoValue-${this.id}" value="${defaultSettings.isoValue}" step="0.001">
                                 </div>
-                                <div class="control-group">
-                                    <div class="file-info">
-                                        <div class="file-control">
-                                            <label class="file-label" id="file1-label-${this.id}">文件 1:</label>
-                                            <input type="color" id="color1-${this.id}" value="${this.color1}">
-                                        </div>
-                                        <div class="file-control">
-                                            <label class="file-label" id="file2-label-${this.id}">文件 2:</label>
-                                            <input type="color" id="color2-${this.id}" value="${this.color2}">
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="control-group">
-                                    <div class="button-row">
-                                        <button class="btn" id="toggleCub1-${this.id}" onclick="viewerGroups[${this.id}].toggleCub1()">
-                                            隐藏 CUB1
-                                        </button>
-                                        <button class="btn" id="toggleCub2-${this.id}" onclick="viewerGroups[${this.id}].toggleCub2()">
-                                            隐藏 CUB2
-                                        </button>
-                                    </div>
-                                    <button class="btn screenshot-btn" onclick="viewerGroups[${this.id}].takeScreenshot()">
-                                        截图
-                                    </button>
+                                <div class="slider-container">
+                                    <label>等值面缩放: <span id="scaleDisplay-${this.id}">${defaultSettings.surfaceScale}</span></label>
+                                    <input type="range" id="surfaceScale-${this.id}" min="0.5" max="5.0" step="0.1" value="${defaultSettings.surfaceScale}">
                                 </div>
                             </div>
-                            <div class="viewer" id="viewer-${this.id}"></div>
+                        </div>
+                        <div class="control-group">
+                            <div class="file-info">
+                                <div class="file-control">
+                                    <label class="file-label" id="file1-label-${this.id}">文件 1:</label>
+                                    <input type="color" id="color1-${this.id}" value="${this.color1}">
+                                </div>
+                                <div class="file-control">
+                                    <label class="file-label" id="file2-label-${this.id}">文件 2:</label>
+                                    <input type="color" id="color2-${this.id}" value="${this.color2}">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="control-group">
+                            <div class="button-row">
+                                <button class="btn" id="toggleCub1-${this.id}" onclick="viewerGroups[${this.id}].toggleCub1()">
+                                    隐藏 CUB1
+                                </button>
+                                <button class="btn" id="toggleCub2-${this.id}" onclick="viewerGroups[${this.id}].toggleCub2()">
+                                    隐藏 CUB2
+                                </button>
+                            </div>
+                            <button class="btn screenshot-btn" onclick="viewerGroups[${this.id}].takeScreenshot()">
+                                截图
+                            </button>
                         </div>
                     </div>
-                `;
+                    <div class="viewer" id="viewer-${this.id}"></div>
+                </div>
+            </div>
+        `;
+    }
+
+    // 将控制面板部分提取为单独的方法
+    createViewerControls(defaultSettings) {
+        return `
+            <div class="viewer-controls">
+                <div class="control-group">
+                    <div class="input-container">
+                        <div>
+                            <label for="isoValue-${this.id}">等值面值:</label>
+                            <input type="number" id="isoValue-${this.id}" value="${defaultSettings.isoValue}" step="0.001">
+                        </div>
+                        <div class="slider-container">
+                            <label>等值面缩放: <span id="scaleDisplay-${this.id}">${defaultSettings.surfaceScale}</span></label>
+                            <input type="range" id="surfaceScale-${this.id}" min="0.5" max="5.0" step="0.1" value="${defaultSettings.surfaceScale}">
+                        </div>
+                    </div>
+                </div>
+                <div class="control-group">
+                    <div class="file-info">
+                        <div class="file-control">
+                            <label class="file-label" id="file1-label-${this.id}">文件 1:</label>
+                            <input type="color" id="color1-${this.id}" value="${this.color1}">
+                        </div>
+                        <div class="file-control">
+                            <label class="file-label" id="file2-label-${this.id}">文件 2:</label>
+                            <input type="color" id="color2-${this.id}" value="${this.color2}">
+                        </div>
+                    </div>
+                </div>
+                <div class="control-group">
+                    <div class="button-row">
+                        <button class="btn" id="toggleCub1-${this.id}" onclick="viewerGroups[${this.id}].toggleCub1()">
+                            隐藏 CUB1
+                        </button>
+                        <button class="btn" id="toggleCub2-${this.id}" onclick="viewerGroups[${this.id}].toggleCub2()">
+                            隐藏 CUB2
+                        </button>
+                    </div>
+                    <button class="btn screenshot-btn" onclick="viewerGroups[${this.id}].takeScreenshot()">
+                        截图
+                    </button>
+                </div>
+            </div>
+            <div class="viewer" id="viewer-${this.id}"></div>
+        `;
+    }
+
+    close() {
+        try {
+            console.log('开始删除轨道组:', this.id, this.title);
+            
+            // 1. 从 DOM 中移除
+            const element = document.getElementById(`group-${this.id}`);
+            if (!element) {
+                console.error('找不到要删除的元素:', this.id);
+                return;
+            }
+            element.remove();
+            
+            // 2. 从数组中移除
+            const index = viewerGroups.indexOf(this);
+            if (index === -1) {
+                console.error('在 viewerGroups 中找不到要删除的组:', this.id);
+                return;
+            }
+            viewerGroups.splice(index, 1);
+            
+            // 3. 重新分配所有 id
+            this.reassignIds();
+            
+            console.log('删除完成，当前轨道组数量:', viewerGroups.length);
+            this.logState();
+            
+        } catch (error) {
+            console.error('删除轨道组时出错:', error);
+        }
+    }
+    
+    // 添加重新分配 ID 的方法
+    reassignIds() {
+        viewerGroups.forEach((group, newId) => {
+            const oldId = group.id;
+            group.id = newId;
+            
+            // 更新 DOM 元素
+            const element = document.querySelector(`#group-${oldId}`);
+            if (element) {
+                // 更新主容器 id
+                element.id = `group-${newId}`;
+                
+                // 更新标题输入框
+                const titleInput = element.querySelector('.title-input');
+                if (titleInput) {
+                    titleInput.id = `title-${newId}`;
+                }
+                
+                // 更新查看器容器
+                const viewer = element.querySelector('.viewer');
+                if (viewer) {
+                    viewer.id = `viewer-${newId}`;
+                }
+                
+                // 更新颜色选择器
+                const color1Input = element.querySelector(`input[id^="color1-"]`);
+                if (color1Input) {
+                    color1Input.id = `color1-${newId}`;
+                }
+                
+                const color2Input = element.querySelector(`input[id^="color2-"]`);
+                if (color2Input) {
+                    color2Input.id = `color2-${newId}`;
+                }
+                
+                // 更新等值面输入框
+                const isoValueInput = element.querySelector(`input[id^="isoValue-"]`);
+                if (isoValueInput) {
+                    isoValueInput.id = `isoValue-${newId}`;
+                }
+                
+                // 更新缩放控制
+                const surfaceScaleInput = element.querySelector(`input[id^="surfaceScale-"]`);
+                if (surfaceScaleInput) {
+                    surfaceScaleInput.id = `surfaceScale-${newId}`;
+                }
+                
+                const scaleDisplay = element.querySelector(`span[id^="scaleDisplay-"]`);
+                if (scaleDisplay) {
+                    scaleDisplay.id = `scaleDisplay-${newId}`;
+                }
+                
+                // 更新关闭按钮的 onclick 事件
+                const closeBtn = element.querySelector('.close-btn');
+                if (closeBtn) {
+                    closeBtn.setAttribute('onclick', `viewerGroups[${newId}].close()`);
+                }
+                
+                // 更新 CUB 切换按钮
+                const toggleCub1Btn = element.querySelector(`button[id^="toggleCub1-"]`);
+                if (toggleCub1Btn) {
+                    toggleCub1Btn.id = `toggleCub1-${newId}`;
+                    toggleCub1Btn.setAttribute('onclick', `viewerGroups[${newId}].toggleCub1()`);
+                }
+                
+                const toggleCub2Btn = element.querySelector(`button[id^="toggleCub2-"]`);
+                if (toggleCub2Btn) {
+                    toggleCub2Btn.id = `toggleCub2-${newId}`;
+                    toggleCub2Btn.setAttribute('onclick', `viewerGroups[${newId}].toggleCub2()`);
+                }
+            }
+        });
+    }
+    
+    // 添加状态日志方法
+    logState() {
+        console.log('当前状态:');
+        console.log('ViewerGroups 数组:', viewerGroups.map(g => ({id: g.id, title: g.title})));
+        
+        const domGroups = document.querySelectorAll('.viewer-group');
+        console.log('DOM 元素:');
+        domGroups.forEach(element => {
+            const id = element.id.replace('group-', '');
+            const titleInput = element.querySelector('.title-input');
+            const title = titleInput ? titleInput.value : '未知';
+            console.log(`- DOM ID: ${id}, 标题: ${title}`);
+        });
     }
 }
 
-// 将 calculateGridDimensions 函数移到类外部作为全局函数
+// 修改网格布局计算函数，优先考虑方形布局
 function calculateGridDimensions(count) {
-    // 计算最接近的行列数
-    const aspectRatio = 16/9; // 假设理想的宽高比为16:9
-    const cols = Math.ceil(Math.sqrt(count * aspectRatio));
+    if (count <= 0) return { rows: 0, cols: 0 };
+    
+    // 特殊情况处理
+    if (count === 1) return { rows: 1, cols: 1 };
+    if (count === 2) return { rows: 1, cols: 2 };
+    if (count === 3) return { rows: 2, cols: 2 }; // 2*2 布局，一个位置空着
+    if (count === 4) return { rows: 2, cols: 2 };
+    
+    // 对于大于4的数量，计算最接近的方形布局
+    const sqrt = Math.sqrt(count);
+    const cols = Math.ceil(sqrt);
     const rows = Math.ceil(count / cols);
+    
+    // 如果行数和列数相差太大，尝试调整为更方正的布局
+    if (rows / cols < 0.5) {
+        return {
+            rows: Math.ceil(Math.sqrt(count)),
+            cols: Math.ceil(Math.sqrt(count))
+        };
+    }
+    
     return { rows, cols };
 }
 
@@ -776,7 +992,9 @@ let BASE_PATH = '';
 
 
 async function captureAllViewers() {
-    if (viewerGroups.length === 0) {
+    // 直接从 DOM 中获取所有查看器组
+    const viewerElements = document.querySelectorAll('.viewer-group');
+    if (viewerElements.length === 0) {
         alert('没有可用的轨道组！');
         return;
     }
@@ -787,22 +1005,24 @@ async function captureAllViewers() {
 
         // 缩放因子和间距
         const scale = 2;
-        const padding = 40 * scale; // 图片之间的间距
-        const titleHeight = 60 * scale; // 标题区域高度
-        const lineHeight = 2 * scale; // 分割线高度
+        const padding = 40 * scale;
+        const titleHeight = 60 * scale;
+        const lineHeight = 2 * scale;
 
-        // 计算网格布局
-        const { rows, cols } = calculateGridDimensions(viewerGroups.length);
-        
-        // 获取每个viewer的截图和尺寸信息
+        // 获取所有有效的截图
         const screenshots = [];
         let maxWidth = 0;
         let maxHeight = 0;
 
-        // 获取每个viewer的截图
-        for (let group of viewerGroups) {
-            const canvas = document.querySelector(`#viewer-${group.id} canvas`);
+        // 遍历所有查看器组元素
+        for (const element of viewerElements) {
+            // 获取查看器组的 canvas
+            const canvas = element.querySelector('.viewer canvas');
             if (!canvas) continue;
+
+            // 获取标题
+            const titleInput = element.querySelector('.title-input');
+            const title = titleInput ? titleInput.value : '';
 
             // 创建放大的临时画布
             const tempCanvas = document.createElement('canvas');
@@ -827,7 +1047,7 @@ async function captureAllViewers() {
             tempCtx.font = `bold ${24 * scale}px Arial`;
             tempCtx.textAlign = 'center';
             tempCtx.textBaseline = 'middle';
-            tempCtx.fillText(group.title, tempCanvas.width / 2, titleHeight / 2);
+            tempCtx.fillText(title, tempCanvas.width / 2, titleHeight / 2);
 
             // 绘制标题下方分割线
             tempCtx.beginPath();
@@ -858,12 +1078,15 @@ async function captureAllViewers() {
             maxHeight = Math.max(maxHeight, tempCanvas.height);
         }
 
+        // 计算网格布局
+        const { rows, cols } = calculateGridDimensions(screenshots.length);
+
         // 计算最终画布的大小
         const totalWidth = (maxWidth + padding) * cols - padding;
         const totalHeight = (maxHeight + padding) * rows - padding;
 
         // 设置最终画布的大小
-        finalCanvas.width = totalWidth + padding * 2; // 添加外边距
+        finalCanvas.width = totalWidth + padding * 2;
         finalCanvas.height = totalHeight + padding * 2;
 
         // 填充白色背景
@@ -1002,3 +1225,27 @@ document.addEventListener('DOMContentLoaded', function () {
         addNewViewerGroup();
     }
 });
+
+
+
+// 添加状态验证函数
+function validateViewerGroupsState() {
+    const domGroups = document.querySelectorAll('.viewer-group');
+    
+    // 检查 DOM 和数组长度是否匹配
+    if (domGroups.length !== viewerGroups.length) {
+        console.error('DOM 和 viewerGroups 数组长度不匹配');
+        console.log(`DOM: ${domGroups.length}, Array: ${viewerGroups.length}`);
+    }
+    
+    // 检查每个元素的 ID 是否正确
+    domGroups.forEach((element, index) => {
+        const domId = parseInt(element.id.replace('group-', ''));
+        const arrayId = viewerGroups[index].id;
+        
+        if (domId !== arrayId) {
+            console.error(`ID 不匹配 - DOM: ${domId}, Array: ${arrayId}`);
+        }
+    });
+}
+
