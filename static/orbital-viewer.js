@@ -164,6 +164,21 @@ class ViewerGroup {
         $(`#toggleCub2-${this.id}`).text(this.showCub2 ? '隐藏 CUB2' : '显示 CUB2');
     }
 
+    // 添加切换选项卡的函数
+    switchTab(tabName) {
+        // 获取所有选项卡按钮和内容
+        const tabBtns = document.querySelectorAll(`#group-${this.id} .tab-btn`);
+        const tabContents = document.querySelectorAll(`#group-${this.id} .tab-content`);
+        
+        // 移除所有active类
+        tabBtns.forEach(btn => btn.classList.remove('active'));
+        tabContents.forEach(content => content.classList.remove('active'));
+        
+        // 添加active类到选中的选项卡
+        document.querySelector(`#group-${this.id} .tab-btn[onclick*="${tabName}"]`).classList.add('active');
+        document.querySelector(`#group-${this.id} #${tabName}-tab-${this.id}`).classList.add('active');
+    }
+
     // 添加切换染色模式的方法
     toggleColorMapping() {
         this.isColorMappingEnabled = !this.isColorMappingEnabled;
@@ -525,10 +540,21 @@ class ViewerGroup {
         if (this.currentData1) {
             if (this.isColorMappingEnabled && this.currentData2) {
                 // 使用值映射模式
+                const minValue = parseFloat(document.getElementById(`minMapValue-${this.id}`).value);
+                const maxValue = parseFloat(document.getElementById(`maxMapValue-${this.id}`).value);
+                const negativeColor = document.getElementById(`negativeColor-${this.id}`).value;
+                const positiveColor = document.getElementById(`positiveColor-${this.id}`).value;
+
                 this.viewer.addVolumetricData(this.currentData1, "cube", {
                     isoval: isoValue,
-                    colormap: 'RWB', // 红白蓝配色
-                    mapData: this.currentData2, // 用于染色的数据
+                    colormap: {
+                        gradient: [
+                            { value: minValue, color: negativeColor },
+                            { value: 0, color: '#FFFFFF' },
+                            { value: maxValue, color: positiveColor }
+                        ]
+                    },
+                    mapData: this.currentData2,
                     opacity: 0.85,
                     wireframe: false,
                     origin: this.origin,
@@ -728,7 +754,7 @@ class ViewerGroup {
                 const radius1 = this.getCovalentRadius(atom1.elem);
                 const radius2 = this.getCovalentRadius(atom2.elem);
 
-                // 调整键长判断标准，使用共价半径之和的1.3倍作为阈值
+                // ���整键长判断标准，使用共价半径之和的1.3倍作为阈值
                 if (distance < (radius1 + radius2) * 1.3) {
                     // 根据原子大小调整键的粗细
                     const bondRadius = Math.min(radius1, radius2) * 0.25;  // 键的半径设为较小原子半径的1/4
@@ -758,7 +784,9 @@ class ViewerGroup {
     // 创建HTML结构
     createHTML() {
         const defaultSettings = (window.ORBITAL_VIEWER_CONFIG && window.ORBITAL_VIEWER_CONFIG.defaultSettings) || {
-            isoValue: '0.002'
+            isoValue: '0.002',
+            minMapValue: '-0.02',
+            maxMapValue: '0.03'
         };
         return `
             <div class="viewer-group" id="group-${this.id}">
@@ -770,40 +798,87 @@ class ViewerGroup {
                 </div>
                 <div class="viewer-container">
                     <div class="viewer-controls">
-                        <div class="control-group">
-                            <div class="input-container">
-                                <div>
-                                    <label for="isoValue-${this.id}">等值面值:</label>
-                                    <input type="number" id="isoValue-${this.id}" value="${defaultSettings.isoValue}" step="0.001">
+                        <div class="tabs">
+                            <button class="tab-btn active" onclick="switchTab(${this.id}, 'basic')">基础设置</button>
+                            <button class="tab-btn" onclick="switchTab(${this.id}, 'mapping')">映射设置</button>
+                        </div>
+                        
+                        <div id="basic-tab-${this.id}" class="tab-content active">
+                            <div class="control-group">
+                                <div class="input-container">
+                                    <div>
+                                        <label for="isoValue-${this.id}">等值面值:</label>
+                                        <input type="number" id="isoValue-${this.id}" value="${defaultSettings.isoValue}" step="0.001">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="control-group">
+                                <div class="file-info">
+                                    <div class="file-control">
+                                        <label class="file-label" id="file1-label-${this.id}">文件 1:</label>
+                                        <input type="color" id="color1-${this.id}" value="${this.color1}">
+                                    </div>
+                                    <div class="file-control">
+                                        <label class="file-label" id="file2-label-${this.id}">文件 2:</label>
+                                        <input type="color" id="color2-${this.id}" value="${this.color2}">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="control-group">
+                                <div class="button-row">
+                                    <button class="btn" id="toggleCub1-${this.id}" onclick="viewerGroups[${this.id}].toggleCub1()">
+                                        隐藏 CUB1
+                                    </button>
+                                    <button class="btn" id="toggleCub2-${this.id}" onclick="viewerGroups[${this.id}].toggleCub2()">
+                                        隐藏 CUB2
+                                    </button>
                                 </div>
                             </div>
                         </div>
-                        <div class="control-group">
-                            <div class="file-info">
-                                <div class="file-control">
-                                    <label class="file-label" id="file1-label-${this.id}">文件 1:</label>
-                                    <input type="color" id="color1-${this.id}" value="${this.color1}">
+
+                        <div id="mapping-tab-${this.id}" class="tab-content">
+                            <div class="control-group">
+                                <div class="mapping-controls">
+                                    <label class="switch">
+                                        <input type="checkbox" id="enableMapping-${this.id}" onchange="viewerGroups[${this.id}].toggleColorMapping()">
+                                        <span class="slider round"></span>
+                                    </label>
+                                    <span>启用值映射</span>
                                 </div>
-                                <div class="file-control">
-                                    <label class="file-label" id="file2-label-${this.id}">文件 2:</label>
-                                    <input type="color" id="color2-${this.id}" value="${this.color2}">
+                                <div class="mapping-range">
+                                    <div class="range-input">
+                                        <label>最小值:</label>
+                                        <input type="number" id="minMapValue-${this.id}" 
+                                               value="${defaultSettings.minMapValue}" 
+                                               step="0.001"
+                                               onchange="viewerGroups[${this.id}].updateColorMapping()">
+                                    </div>
+                                    <div class="range-input">
+                                        <label>最大值:</label>
+                                        <input type="number" id="maxMapValue-${this.id}" 
+                                               value="${defaultSettings.maxMapValue}" 
+                                               step="0.001"
+                                               onchange="viewerGroups[${this.id}].updateColorMapping()">
+                                    </div>
+                                </div>
+                                <div class="mapping-colors">
+                                    <div class="color-input">
+                                        <label>负值颜色:</label>
+                                        <input type="color" id="negativeColor-${this.id}" 
+                                               value="#0000FF"
+                                               onchange="viewerGroups[${this.id}].updateColorMapping()">
+                                    </div>
+                                    <div class="color-input">
+                                        <label>正值颜色:</label>
+                                        <input type="color" id="positiveColor-${this.id}" 
+                                               value="#FF0000"
+                                               onchange="viewerGroups[${this.id}].updateColorMapping()">
+                                    </div>
                                 </div>
                             </div>
                         </div>
+
                         <div class="control-group">
-                            <div class="button-row">
-                                <button class="btn" id="toggleColorMap-${this.id}" onclick="viewerGroups[${this.id}].toggleColorMapping()">
-                                    启用值映射
-                                </button>
-                            </div>
-                            <div class="button-row">
-                                <button class="btn" id="toggleCub1-${this.id}" onclick="viewerGroups[${this.id}].toggleCub1()">
-                                    隐藏 CUB1
-                                </button>
-                                <button class="btn" id="toggleCub2-${this.id}" onclick="viewerGroups[${this.id}].toggleCub2()">
-                                    隐藏 CUB2
-                                </button>
-                            </div>
                             <button class="btn screenshot-btn" onclick="viewerGroups[${this.id}].takeScreenshot()">
                                 截图
                             </button>
@@ -812,53 +887,6 @@ class ViewerGroup {
                     <div class="viewer" id="viewer-${this.id}"></div>
                 </div>
             </div>
-        `;
-    }
-
-    // 将控制面板部分提取为单独的方法
-    createViewerControls(defaultSettings) {
-        return `
-            <div class="viewer-controls">
-                <div class="control-group">
-                    <div class="input-container">
-                        <div>
-                            <label for="isoValue-${this.id}">等值面值:</label>
-                            <input type="number" id="isoValue-${this.id}" value="${defaultSettings.isoValue}" step="0.001">
-                        </div>
-                    </div>
-                </div>
-                <div class="control-group">
-                    <div class="file-info">
-                        <div class="file-control">
-                            <label class="file-label" id="file1-label-${this.id}">文件 1:</label>
-                            <input type="color" id="color1-${this.id}" value="${this.color1}">
-                        </div>
-                        <div class="file-control">
-                            <label class="file-label" id="file2-label-${this.id}">文件 2:</label>
-                            <input type="color" id="color2-${this.id}" value="${this.color2}">
-                        </div>
-                    </div>
-                </div>
-                <div class="control-group">
-                    <div class="button-row">
-                        <button class="btn" id="toggleColorMap-${this.id}" onclick="viewerGroups[${this.id}].toggleColorMapping()">
-                            启用值映射
-                        </button>
-                    </div>
-                    <div class="button-row">
-                        <button class="btn" id="toggleCub1-${this.id}" onclick="viewerGroups[${this.id}].toggleCub1()">
-                            隐藏 CUB1
-                        </button>
-                        <button class="btn" id="toggleCub2-${this.id}" onclick="viewerGroups[${this.id}].toggleCub2()">
-                            隐藏 CUB2
-                        </button>
-                    </div>
-                    <button class="btn screenshot-btn" onclick="viewerGroups[${this.id}].takeScreenshot()">
-                        截图
-                    </button>
-                </div>
-            </div>
-            <div class="viewer" id="viewer-${this.id}"></div>
         `;
     }
 
@@ -1235,7 +1263,7 @@ document.getElementById('global-title').addEventListener('input', function () {
 document.addEventListener('DOMContentLoaded', function () {
     // 检查是否有配置数据
     if (window.ORBITAL_VIEWER_CONFIG && window.ORBITAL_VIEWER_CONFIG.configData) {
-        console.log('正在加载配置:', window.ORBITAL_VIEWER_CONFIG);
+        console.log('正���加载配置:', window.ORBITAL_VIEWER_CONFIG);
         const config = window.ORBITAL_VIEWER_CONFIG.configData;
 
         // 设置全局标题
@@ -1244,7 +1272,7 @@ document.addEventListener('DOMContentLoaded', function () {
             document.title = config.globalTitle;
         }
 
-        // 清除现有查看器组
+        // 清除现有查看器���
         document.getElementById('viewers-container').innerHTML = '';
         viewerGroups.length = 0;
 
