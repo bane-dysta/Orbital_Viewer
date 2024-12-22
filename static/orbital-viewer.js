@@ -7,7 +7,7 @@ const atomColors = {
     'H': '#FFFFFF', 'C': '#808080', 'N': '#0000FF', 'O': '#FF0000',
     'F': '#FFFF00', 'Cl': '#00FF00', 'Br': '#A52A2A', 'I': '#940094',
     'Si': '#D9FFFF', 'Ne': '#B3E3F5', 'Ar': '#80D1E3', 'Kr': '#48D1CC',
-    'Xe': '#4194B3'
+    'Xe': '#4194B3', 'S': '#F1E266', 'B': '#FEB5B8'
 };
 
 const covalentRadii = {
@@ -729,6 +729,15 @@ class ViewerGroup {
     }
 }
 
+// 将 calculateGridDimensions 函数移到类外部作为全局函数
+function calculateGridDimensions(count) {
+    // 计算最接近的行列数
+    const aspectRatio = 16/9; // 假设理想的宽高比为16:9
+    const cols = Math.ceil(Math.sqrt(count * aspectRatio));
+    const rows = Math.ceil(count / cols);
+    return { rows, cols };
+}
+
 // 添加新的查看器组
 function addNewViewerGroup() {
     const newId = viewerGroups.length;
@@ -776,15 +785,19 @@ async function captureAllViewers() {
         const finalCanvas = document.createElement('canvas');
         const ctx = finalCanvas.getContext('2d');
 
-        // 缩放因子
+        // 缩放因子和间距
         const scale = 2;
         const padding = 40 * scale; // 图片之间的间距
         const titleHeight = 60 * scale; // 标题区域高度
         const lineHeight = 2 * scale; // 分割线高度
 
+        // 计算网格布局
+        const { rows, cols } = calculateGridDimensions(viewerGroups.length);
+        
+        // 获取每个viewer的截图和尺寸信息
         const screenshots = [];
         let maxWidth = 0;
-        let totalHeight = 0;
+        let maxHeight = 0;
 
         // 获取每个viewer的截图
         for (let group of viewerGroups) {
@@ -794,7 +807,6 @@ async function captureAllViewers() {
             // 创建放大的临时画布
             const tempCanvas = document.createElement('canvas');
             tempCanvas.width = canvas.width * scale;
-            // 增加顶部和底部空间用于标题和分割线
             tempCanvas.height = (canvas.height + titleHeight / scale + lineHeight / scale * 2) * scale;
             const tempCtx = tempCanvas.getContext('2d');
 
@@ -810,7 +822,7 @@ async function captureAllViewers() {
             tempCtx.lineTo(tempCanvas.width, 0);
             tempCtx.stroke();
 
-            // 添加标题（在上方分割线下）
+            // 添加标题
             tempCtx.fillStyle = '#333';
             tempCtx.font = `bold ${24 * scale}px Arial`;
             tempCtx.textAlign = 'center';
@@ -843,23 +855,34 @@ async function captureAllViewers() {
             });
 
             maxWidth = Math.max(maxWidth, tempCanvas.width);
-            totalHeight += tempCanvas.height + padding;
+            maxHeight = Math.max(maxHeight, tempCanvas.height);
         }
 
+        // 计算最终画布的大小
+        const totalWidth = (maxWidth + padding) * cols - padding;
+        const totalHeight = (maxHeight + padding) * rows - padding;
+
         // 设置最终画布的大小
-        finalCanvas.width = maxWidth;
-        finalCanvas.height = totalHeight;
+        finalCanvas.width = totalWidth + padding * 2; // 添加外边距
+        finalCanvas.height = totalHeight + padding * 2;
 
         // 填充白色背景
         ctx.fillStyle = 'white';
         ctx.fillRect(0, 0, finalCanvas.width, finalCanvas.height);
 
-        // 绘制所有截图
-        let currentY = padding / 2; // 添加顶部间距
-        for (let screenshot of screenshots) {
-            const x = (maxWidth - screenshot.width) / 2;
-            ctx.drawImage(screenshot.canvas, x, currentY);
-            currentY += screenshot.height + padding;
+        // 在网格中绘制所有截图
+        let index = 0;
+        for (let row = 0; row < rows; row++) {
+            for (let col = 0; col < cols; col++) {
+                if (index >= screenshots.length) break;
+                
+                const screenshot = screenshots[index];
+                const x = padding + col * (maxWidth + padding) + (maxWidth - screenshot.width) / 2;
+                const y = padding + row * (maxHeight + padding) + (maxHeight - screenshot.height) / 2;
+                
+                ctx.drawImage(screenshot.canvas, x, y);
+                index++;
+            }
         }
 
         // 将最终的canvas转换为blob并复制到剪贴板
