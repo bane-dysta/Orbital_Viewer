@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Colormap</title>
+    <script src="/static/3Dmol-min.js"></script>
+    <script src="/static/jquery.min.js"></script>
+    <style>
+        .container {
+            width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+        }
+        .viewer {
+            height: 400px;
+            border: 1px solid #ccc;
+            margin: 20px 0;
+        }
+        .controls {
+            margin: 20px 0;
+            padding: 10px;
+            background: #f5f5f5;
+            border-radius: 4px;
+        }
+        .control-group {
+            margin: 10px 0;
+        }
+        label {
+            display: inline-block;
+            width: 100px;
+        }
+        input {
+            margin: 5px;
+        }
+        .file-inputs {
+            margin: 20px 0;
+            padding: 15px;
+            background: #f5f5f5;
+            border-radius: 4px;
+        }
+        #file1-name, #file2-name {
+            margin-top: 5px;
+            font-size: 0.9em;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>颜色映射测试</h1>
+        
+        <div class="file-inputs">
+            <div class="control-group">
+                <label>RDG文件:</label>
+                <input type="file" id="file1" accept=".cube,.cub">
+                <div id="file1-name"></div>
+            </div>
+            <div class="control-group">
+                <label>Sign(λ2)ρ文件:</label>
+                <input type="file" id="file2" accept=".cube,.cub">
+                <div id="file2-name"></div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <div class="control-group">
+                <label>等值面值:</label>
+                <input type="number" id="isoValue" value="0.5" step="0.1">
+            </div>
+            
+            <div class="control-group">
+                <label>最小值:</label>
+                <input type="number" id="minValue" value="-0.02" step="0.001">
+            </div>
+            
+            <div class="control-group">
+                <label>最大值:</label>
+                <input type="number" id="maxValue" value="0.03" step="0.001">
+            </div>
+            
+            <div class="control-group">
+                <label>负值颜色:</label>
+                <input type="color" id="negativeColor" value="#0000FF">
+            </div>
+            
+            <div class="control-group">
+                <label>正值颜色:</label>
+                <input type="color" id="positiveColor" value="#FF0000">
+            </div>
+        </div>
+
+        <div id="viewer" class="viewer"></div>
+    </div>
+
+    <script>
+        let viewer;
+        let currentData1 = null;
+        let currentData2 = null;
+        let atomList = [];
+        let origin = { x: 0, y: 0, z: 0 };
+
+        // 初始化查看器
+        function initViewer() {
+            viewer = $3Dmol.createViewer("viewer", {
+                backgroundColor: "white"
+            });
+        }
+
+        // 更新表面显示
+        function updateSurface() {
+            if (!viewer || !currentData1 || !currentData2) return;
+
+            viewer.clear();
+            displayMolecule();
+
+            const isoValue = parseFloat(document.getElementById('isoValue').value);
+            const minValue = parseFloat(document.getElementById('minValue').value);
+            const maxValue = parseFloat(document.getElementById('maxValue').value);
+            const negativeColor = document.getElementById('negativeColor').value;
+            const positiveColor = document.getElementById('positiveColor').value;
+
+            // 使用cub1生成等值面,cub2进行颜色映射
+            viewer.addVolumetricData(currentData1, "cube", {
+                isoval: isoValue,
+                colormap: {
+                    gradient: [
+                        { value: minValue, color: negativeColor },
+                        { value: 0, color: "#FFFFFF" },
+                        { value: maxValue, color: positiveColor }
+                    ]
+                },
+                mapData: currentData2,
+                opacity: 0.85,
+                wireframe: false,
+                origin: origin,
+                dimensional: true
+            });
+
+            viewer.render();
+        }
+
+        // 显示分子结构
+        function displayMolecule() {
+            if (!atomList.length) return;
+
+            atomList.forEach(atom => {
+                viewer.addSphere({
+                    center: { x: atom.x, y: atom.y, z: atom.z },
+                    radius: 0.3,
+                    color: atom.color || '#808080'
+                });
+            });
+
+            viewer.zoomTo();
+        }
+
+        // 解析Cube文件
+        function parseCubeFile(data) {
+            const lines = data.split('\n');
+            const atoms = [];
+            
+            // 解析原子数量
+            const natoms = Math.abs(parseInt(lines[2].trim().split(/\s+/)[0]));
+            
+            // 解析原点
+            const originLine = lines[2].trim().split(/\s+/);
+            origin = {
+                x: parseFloat(originLine[1]),
+                y: parseFloat(originLine[2]),
+                z: parseFloat(originLine[3])
+            };
+
+            // 解析原子坐标
+            const bohrToAng = 0.529177;
+            for (let i = 0; i < natoms; i++) {
+                const line = lines[i + 6].trim().split(/\s+/);
+                atoms.push({
+                    elem: getElementSymbol(parseInt(line[0])),
+                    x: parseFloat(line[2]) * bohrToAng,
+                    y: parseFloat(line[3]) * bohrToAng,
+                    z: parseFloat(line[4]) * bohrToAng
+                });
+            }
+
+            return atoms;
+        }
+
+        // 获取元素符号
+        function getElementSymbol(atomicNumber) {
+            const elements = ["H", "He", "Li", "Be", "B", "C", "N", "O", "F", "Ne"];
+            return elements[atomicNumber - 1] || "X";
+        }
+
+        // 设置文件输入事件监听
+        function setupFileInputs() {
+            const file1Input = document.getElementById('file1');
+            const file2Input = document.getElementById('file2');
+            const file1Name = document.getElementById('file1-name');
+            const file2Name = document.getElementById('file2-name');
+
+            async function handleFileChange() {
+                try {
+                    if (file1Input.files.length && file2Input.files.length) {
+                        currentData1 = await file1Input.files[0].text();
+                        atomList = parseCubeFile(currentData1);
+                        file1Name.textContent = `已选择: ${file1Input.files[0].name}`;
+                        
+                        currentData2 = await file2Input.files[0].text();
+                        file2Name.textContent = `已选择: ${file2Input.files[0].name}`;
+
+                        updateSurface();
+                    }
+                } catch (error) {
+                    console.error('文件读取错误:', error);
+                    if (error.target === file1Input) {
+                        file1Name.innerHTML = `<span style="color: red;">文件读取失败: ${error.message}</span>`;
+                    } else {
+                        file2Name.innerHTML = `<span style="color: red;">文件读取失败: ${error.message}</span>`;
+                    }
+                }
+            }
+
+            file1Input.addEventListener('change', handleFileChange);
+            file2Input.addEventListener('change', handleFileChange);
+        }
+
+        // 设置控件事件监听
+        function setupControls() {
+            ['isoValue', 'minValue', 'maxValue', 'negativeColor', 'positiveColor'].forEach(id => {
+                document.getElementById(id).addEventListener('change', updateSurface);
+            });
+        }
+
+        // 初始化
+        window.onload = function() {
+            initViewer();
+            setupFileInputs();
+            setupControls();
+        };
+    </script>
+</body>
+</html>

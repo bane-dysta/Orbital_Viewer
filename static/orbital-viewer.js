@@ -358,7 +358,7 @@ class ViewerGroup {
 
         viewerEl.addEventListener('drop', (e) => {
             if (e.dataTransfer.types.includes('Files')) {
-                dragCounter = 0; // ���置计数器
+                dragCounter = 0; // 重置计数器
                 dropZone.classList.remove('active');
                 e.preventDefault();
                 e.stopPropagation();
@@ -379,7 +379,7 @@ class ViewerGroup {
         return files.sort((a, b) => a.name.localeCompare(b.name));
     }
 
-    // 处理传的文件
+    // 处理文件
     async handleFiles(newFiles) {
         // 过滤出 .cube/.cub 文件
         const cubeFiles = Array.from(newFiles).filter(file =>
@@ -473,7 +473,7 @@ class ViewerGroup {
             group.updateSurfaces();
         });
 
-        // 修复第一个错误：增加分号
+        // 修复第一个误：增加分号
         $(`#color1-${this.id}`).on('change', function () {
             group.color1 = this.value;
             group.updateSurfaces();
@@ -526,7 +526,7 @@ class ViewerGroup {
                 this.updateSurfaces();
             }
 
-            // 仅当 fileName2 有实际值（非空字符串）时尝试加载第二个文件
+            // 仅当 fileName2 有实际值（非空字符串）时尝���加载第二个文件
             if (this.fileName2 && this.fileName2.trim() !== '') {
                 const response2 = await fetch(this.fileName2);
                 if (!response2.ok) {
@@ -564,23 +564,22 @@ class ViewerGroup {
                 const negativeColor = document.getElementById(`negativeColor-${this.id}`).value;
                 const positiveColor = document.getElementById(`positiveColor-${this.id}`).value;
 
+                // 使用 RDG 生成等值面，用 Sign(λ2)ρ 的值来映射颜色
                 this.viewer.addVolumetricData(this.currentData1, "cube", {
                     isoval: isoValue,
-                    colormap: {
-                        gradient: [
-                            { value: minValue, color: negativeColor },
-                            { value: 0, color: '#FFFFFF' },
-                            { value: maxValue, color: positiveColor }
-                        ]
+                    voldata: this.currentData2,
+                    volformat: "cube",
+                    volscheme: {
+                        gradient: "rwb",
+                        min: minValue,
+                        max: maxValue,
+                        mid: 0
                     },
-                    mapData: this.currentData2,
                     opacity: 0.85,
-                    wireframe: false,
-                    origin: this.origin,
-                    dimensional: true
+                    wireframe: false
                 });
             } else {
-                // 使用原来的模式
+                // 使用原来的显示模式
                 if (this.showCub1) {
                     this.currentVolumeId1 = this.viewer.addVolumetricData(this.currentData1, "cube", {
                         isoval: isoValue,
@@ -747,7 +746,7 @@ class ViewerGroup {
     displayMolecule() {
         if (!this.viewer || this.atomList.length === 0) return;
 
-        // 设置基准比例因子，用于调整整体大小
+        // 设置基准例因子，用于调整整体大小
         const RADIUS_SCALE = 0.4;  // 可以调整这个值来改变整体大小
 
         // 添加原子
@@ -1003,7 +1002,7 @@ class ViewerGroup {
         console.log('ViewerGroups 数组:', viewerGroups.map(g => ({id: g.id, title: g.title})));
         
         const domGroups = document.querySelectorAll('.viewer-group');
-        console.log('DOM 元素:');
+        console.log('DOM 元:');
         domGroups.forEach(element => {
             const id = element.id.replace('group-', '');
             const titleInput = element.querySelector('.title-input');
@@ -1020,7 +1019,7 @@ class ViewerGroup {
         const negativeColor = document.getElementById(`negativeColor-${this.id}`).value;
         const positiveColor = document.getElementById(`positiveColor-${this.id}`).value;
 
-        // 更新表面显示
+        // 更新面显示
         this.updateSurfaces();
     }
 }
@@ -1106,7 +1105,7 @@ async function captureAllViewers() {
         const titleHeight = 60 * scale;
         const lineHeight = 2 * scale;
 
-        // 获取所有有效的截图
+        // 获取所有有的截图
         const screenshots = [];
         let maxWidth = 0;
         let maxHeight = 0;
@@ -1121,7 +1120,7 @@ async function captureAllViewers() {
             const titleInput = element.querySelector('.title-input');
             const title = titleInput ? titleInput.value : '';
 
-            // 创建放大的临时画布
+            // 创建放大的临��画布
             const tempCanvas = document.createElement('canvas');
             tempCanvas.width = canvas.width * scale;
             tempCanvas.height = (canvas.height + titleHeight / scale + lineHeight / scale * 2) * scale;
@@ -1265,10 +1264,10 @@ async function loadConfiguration(event) {
             const container = document.getElementById('viewers-container');
             container.insertAdjacentHTML('beforeend', newGroup.createHTML());
 
-            // 先初始化查看器
+            // 先初始化���看器
             newGroup.initialize();
 
-            // 然后加载配置
+            // 然后载配置
             newGroup.loadConfiguration(viewerConfig);
         }
     } catch (error) {
@@ -1291,7 +1290,7 @@ document.addEventListener('DOMContentLoaded', function () {
         console.log('正在加载配置:', window.ORBITAL_VIEWER_CONFIG);
         const config = window.ORBITAL_VIEWER_CONFIG.configData;
 
-        // 设置全局标���
+        // 设置全局标题
         if (config.globalTitle) {
             document.getElementById('global-title').value = config.globalTitle;
             document.title = config.globalTitle;
@@ -1359,5 +1358,12 @@ function switchTab(groupId, tabName) {
     // 添加active类到选中的选项卡
     document.querySelector(`#group-${groupId} .tab-btn[data-tab="${tabName}"]`).classList.add('active');
     document.querySelector(`#group-${groupId} #${tabName}-tab-${groupId}`).classList.add('active');
+}
+
+// 修改 setupControls 方法
+function setupControls() {
+    ['isoValue', 'minValue', 'maxValue', 'negativeColor', 'positiveColor'].forEach(id => {
+        document.getElementById(`${id}-${this.id}`).addEventListener('change', () => this.updateSurfaces());
+    });
 }
 
