@@ -603,3 +603,50 @@ input:checked + .slider:before {
 .slider.round:before {
     border-radius: 50%;
 }
+
+/* 备注功能相关样式 */
+.notes-tab {
+    padding: 10px;
+}
+
+.notes-area {
+    width: 100%;
+    min-height: 100px;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    resize: vertical;
+    font-family: Arial, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    background-color: #fff;
+    transition: border-color 0.3s ease;
+}
+
+.notes-area:focus {
+    outline: none;
+    border-color: #2196F3;
+    box-shadow: 0 0 5px rgba(33, 150, 243, 0.3);
+}
+
+.notes-area::placeholder {
+    color: #999;
+}
+
+.notes-label {
+    display: block;
+    margin-bottom: 8px;
+    color: #666;
+    font-size: 14px;
+}
+
+.notes-container {
+    margin-top: 10px;
+}
+
+/* 确保备注区域在小屏幕上也能正常显示 */
+@media (max-width: 768px) {
+    .notes-area {
+        min-height: 80px;
+    }
+}

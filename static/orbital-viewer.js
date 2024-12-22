@@ -108,28 +108,31 @@ class ViewerGroup {
         this.currentVolumeId2 = null;
         this.title = `轨道组 ${id}`;
         this.uploadedFiles = [];
-        this.fileName1 = '';   // 第一个文件名
-        this.fileName2 = '';   // 第二个文件名
+        this.fileName1 = '';
+        this.fileName2 = '';
         this.basePath = '';
-        this.showNegative = true; // 控制是否显示负值
-        this.isInitialized = false; // 初始化标志
-        this.showCub1 = true;  // 新增：控制 cub1 的显示状态
-        this.showCub2 = true;  // 新增：控制 cub2 的显示状态
-        this.isColorMappingEnabled = false; // 新增：控制是否启用值映射染色
+        this.showNegative = true;
+        this.isInitialized = false;
+        this.showCub1 = true;
+        this.showCub2 = true;
+        this.isColorMappingEnabled = false;
+        
+        // 初始化备注管理器
+        this.notesManager = new NotesManager(this.id);
     }
+
     async initialize() {
         if (this.isInitialized) return;
 
-        // 创建3Dmol查看器，启用默认的拖动和缩放功能
+        // 创建3Dmol查看器
         this.viewer = $3Dmol.createViewer(`viewer-${this.id}`, {
             backgroundColor: "white",
             id: `viewer-${this.id}`,
-            // 添加交互选项
             defaultcolors: $3Dmol.rasmolElementColors,
             control: {
-                dragScale: 0.5, // 拖动灵敏度
-                scrollScale: 0.5, // 滚轮缩放灵敏度
-                rotateSpeed: 0.5 // 旋转速度
+                dragScale: 0.5,
+                scrollScale: 0.5,
+                rotateSpeed: 0.5
             }
         });
 
@@ -142,6 +145,10 @@ class ViewerGroup {
 
         this.setupEventListeners();
         this.setupDropZone();
+        
+        // 初始化备注管理器
+        await this.notesManager.initialize();
+        
         this.isInitialized = true;
 
         // 等待DOM更新
@@ -207,10 +214,10 @@ class ViewerGroup {
             // 获取查看器的 canvas 元素
             const canvas = document.querySelector(`#viewer-${this.id} canvas`);
             if (!canvas) {
-                throw new Error('未找到 canvas 元素');
+                throw new Error('找不到 canvas 元素');
             }
 
-            // 创建一个临时的 canvas 来处理截图
+            // 创建一个��� canvas 来处理截图
             const tempCanvas = document.createElement('canvas');
             tempCanvas.width = canvas.width;
             tempCanvas.height = canvas.height;
@@ -244,7 +251,7 @@ class ViewerGroup {
         // 检查是否已存在 toast 元素
         let toast = document.getElementById('screenshot-toast');
         if (!toast) {
-            // 创建新的 toast 元素
+            // 创建的 toast 元素
             toast = document.createElement('div');
             toast.id = 'screenshot-toast';
             document.body.appendChild(toast);
@@ -267,8 +274,8 @@ class ViewerGroup {
         this.showPositive = config.showPositive;
         this.fileName1 = config.fileName1;
         this.fileName2 = config.fileName2 || '';
-        this.showCub1 = true;  // 初始化显示状态
-        this.showCub2 = true;  // 初始化显示状态
+        this.showCub1 = true;
+        this.showCub2 = true;
 
         $(`#title-${this.id}`).val(config.title);
         $(`#color1-${this.id}`).val(config.color1);
@@ -281,20 +288,37 @@ class ViewerGroup {
         $(`#file1-label-${this.id}`).text(`文件 1: ${this.fileName1}`);
         $(`#file2-label-${this.id}`).text(`文件 2: ${this.fileName2 || ''}`);
 
+        // 加载备注
+        try {
+            if (config.notes) {
+                // 确保 notesManager 已经初始化
+                if (!this.notesManager) {
+                    this.notesManager = new NotesManager(this.id);
+                }
+                
+                // 加载备注配置
+                this.notesManager.loadConfiguration(config.notes);
+                
+                // 直接更新文本区域的值
+                const notesArea = document.getElementById(`notes-${this.id}`);
+                if (notesArea) {
+                    notesArea.value = config.notes.notes || '';
+                    // 触发一次 input 事件以调整高度
+                    const event = new Event('input', {
+                        bubbles: true,
+                        cancelable: true,
+                    });
+                    notesArea.dispatchEvent(event);
+                }
+            }
+        } catch (error) {
+            console.error('加载备注时出错:', error);
+        }
+
         // 如果至少有一个文件名，就开始加载
         if (this.fileName1) {
-            // 使用 setTimeout 确保在 DOM 更新后再加载文件
             setTimeout(() => this.autoLoadFiles(), 0);
         }
-    }
-
-
-    initialize() {
-        this.viewer = $3Dmol.createViewer(`viewer-${this.id}`, {
-            backgroundColor: "white"
-        });
-        this.setupEventListeners();
-        this.setupDropZone();
     }
 
     getConfiguration() {
@@ -307,11 +331,10 @@ class ViewerGroup {
             surfaceScale: $(`#surfaceScale-${this.id}`).val(),
             showPositive: this.showPositive,
             fileName1: this.fileName1,
-            fileName2: this.fileName2
+            fileName2: this.fileName2,
+            notes: this.notesManager.getConfiguration()
         };
     }
-
-
 
     // 设置文件拖放区域
     setupDropZone() {
@@ -348,7 +371,7 @@ class ViewerGroup {
         viewerEl.addEventListener('dragleave', (e) => {
             if (e.dataTransfer.types.includes('Files')) {
                 dragCounter--;
-                if (dragCounter === 0) { // 只在完全离开时隐藏
+                if (dragCounter === 0) { // 在完全离开时隐藏
                     dropZone.classList.remove('active');
                 }
                 e.preventDefault();
@@ -373,7 +396,6 @@ class ViewerGroup {
         }, false);
     }
 
-
     // 简化的文件排序方法
     sortFilesByName(files) {
         return files.sort((a, b) => a.name.localeCompare(b.name));
@@ -392,7 +414,7 @@ class ViewerGroup {
             this.uploadedFiles = [];
         }
 
-        // 添加新文件
+        // 加新文件
         this.uploadedFiles.push(...cubeFiles);
 
         // 对文件进行排序
@@ -441,7 +463,7 @@ class ViewerGroup {
         }
     }
 
-    // 读取文件内容
+    // 读文件内容
     readFile(file) {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
@@ -526,7 +548,7 @@ class ViewerGroup {
                 this.updateSurfaces();
             }
 
-            // 仅当 fileName2 有实际值（非空字符串）时尝���加载第二个文件
+            // 仅当 fileName2 有实际值（非空字符串）时尝加载第二个文件
             if (this.fileName2 && this.fileName2.trim() !== '') {
                 const response2 = await fetch(this.fileName2);
                 if (!response2.ok) {
@@ -544,8 +566,6 @@ class ViewerGroup {
             this.showError(error.message);
         }
     }
-
-
 
     // 更新表面
     updateSurfaces() {
@@ -746,7 +766,7 @@ class ViewerGroup {
     displayMolecule() {
         if (!this.viewer || this.atomList.length === 0) return;
 
-        // 设置基准例因子，用于调整整体大小
+        // 设置基准因子，于调整整体大小
         const RADIUS_SCALE = 0.4;  // 可以调整这个值来改变整体大小
 
         // 添加原子
@@ -775,7 +795,7 @@ class ViewerGroup {
                 // 整键长判断标准，用共价半径之和的1.3倍作为阈值
                 if (distance < (radius1 + radius2) * 1.3) {
                     // 根据原子大小调整键的粗细
-                    const bondRadius = Math.min(radius1, radius2) * 0.25;  // 键的半径设为较小原子半径的1/4
+                    const bondRadius = Math.min(radius1, radius2) * 0.25;  // 键的径设��较小原子半径的1/4
                     
                     this.viewer.addCylinder({
                         start: { x: atom1.x, y: atom1.y, z: atom1.z },
@@ -801,11 +821,6 @@ class ViewerGroup {
 
     // 创建HTML结构
     createHTML() {
-        const defaultSettings = (window.ORBITAL_VIEWER_CONFIG && window.ORBITAL_VIEWER_CONFIG.defaultSettings) || {
-            isoValue: '0.002',
-            minMapValue: '-0.02',
-            maxMapValue: '0.03'
-        };
         return `
             <div class="viewer-group" id="group-${this.id}">
                 <div class="viewer-header">
@@ -817,76 +832,26 @@ class ViewerGroup {
                 <div class="viewer-container">
                     <div class="viewer-controls">
                         <div class="tabs">
-                            <button class="tab-btn active" data-tab="basic" onclick="switchTab(${this.id}, 'basic')">基础设置</button>
-                            <button class="tab-btn" data-tab="mapping" onclick="switchTab(${this.id}, 'mapping')">映射设置</button>
+                            <button class="tab-btn active" data-tab="basic" onclick="switchTab(${this.id}, 'basic')">Basis</button>
+                            <button class="tab-btn" data-tab="mapping" onclick="switchTab(${this.id}, 'mapping')">Mapping</button>
+                            <button class="tab-btn" data-tab="notes" onclick="switchTab(${this.id}, 'notes')">Notes</button>
                         </div>
                         
                         <div id="basic-tab-${this.id}" class="tab-content active">
-                            <div class="control-group">
-                                <div class="input-container">
-                                    <div>
-                                        <label for="isoValue-${this.id}">等值面值:</label>
-                                        <input type="number" id="isoValue-${this.id}" value="${defaultSettings.isoValue}" step="0.001">
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="control-group">
-                                <div class="file-info">
-                                    <div class="file-control">
-                                        <label class="file-label" id="file1-label-${this.id}">文件 1:</label>
-                                        <input type="color" id="color1-${this.id}" value="${this.color1}">
-                                    </div>
-                                    <div class="file-control">
-                                        <label class="file-label" id="file2-label-${this.id}">文件 2:</label>
-                                        <input type="color" id="color2-${this.id}" value="${this.color2}">
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="control-group">
-                                <div class="button-row">
-                                    <button class="btn" id="toggleCub1-${this.id}" onclick="viewerGroups[${this.id}].toggleCub1()">
-                                        隐藏 CUB1
-                                    </button>
-                                    <button class="btn" id="toggleCub2-${this.id}" onclick="viewerGroups[${this.id}].toggleCub2()">
-                                        隐藏 CUB2
-                                    </button>
-                                </div>
-                            </div>
+                            ${this.createBasicTabContent()}
                         </div>
 
                         <div id="mapping-tab-${this.id}" class="tab-content">
-                            <div class="control-group">
-                                <div class="mapping-controls">
-                                    <button class="btn" id="toggleColorMap-${this.id}" onclick="viewerGroups[${this.id}].toggleColorMapping()">
-                                        启用值映射
-                                    </button>
-                                </div>
-                                <div class="mapping-range">
-                                    <div class="range-input">
-                                        <label>最小值:</label>
-                                        <input type="number" id="minMapValue-${this.id}" 
-                                               value="${defaultSettings.minMapValue}" 
-                                               step="0.001">
-                                    </div>
-                                    <div class="range-input">
-                                        <label>最大值:</label>
-                                        <input type="number" id="maxMapValue-${this.id}" 
-                                               value="${defaultSettings.maxMapValue}" 
-                                               step="0.001">
-                                    </div>
-                                </div>
-                                <div class="mapping-colors">
-                                    <div class="color-input">
-                                        <label>负值颜色:</label>
-                                        <input type="color" id="negativeColor-${this.id}" 
-                                               value="#0000FF">
-                                    </div>
-                                    <div class="color-input">
-                                        <label>正值颜色:</label>
-                                        <input type="color" id="positiveColor-${this.id}" 
-                                               value="#FF0000">
-                                    </div>
-                                </div>
+                            ${this.createMappingTabContent()}
+                        </div>
+
+                        <div id="notes-tab-${this.id}" class="tab-content">
+                            <div class="notes-container">
+                                <label class="notes-label" for="notes-${this.id}">备注:</label>
+                                <textarea id="notes-${this.id}" 
+                                    class="notes-area" 
+                                    placeholder="在这里添加关于该轨道组的备注..."
+                                ></textarea>
                             </div>
                         </div>
 
@@ -897,6 +862,91 @@ class ViewerGroup {
                         </div>
                     </div>
                     <div class="viewer" id="viewer-${this.id}"></div>
+                </div>
+            </div>
+        `;
+    }
+
+    // 创建基础设置标签页内容
+    createBasicTabContent() {
+        const defaultSettings = (window.ORBITAL_VIEWER_CONFIG && window.ORBITAL_VIEWER_CONFIG.defaultSettings) || {
+            isoValue: '0.002',
+            surfaceScale: '1.0'
+        };
+
+        return `
+            <div class="control-group">
+                <div class="input-container">
+                    <div>
+                        <label for="isoValue-${this.id}">等值面值:</label>
+                        <input type="number" id="isoValue-${this.id}" value="${defaultSettings.isoValue}" step="0.001">
+                    </div>
+                </div>
+            </div>
+            <div class="control-group">
+                <div class="file-info">
+                    <div class="file-control">
+                        <label class="file-label" id="file1-label-${this.id}">文件 1:</label>
+                        <input type="color" id="color1-${this.id}" value="${this.color1}">
+                    </div>
+                    <div class="file-control">
+                        <label class="file-label" id="file2-label-${this.id}">文件 2:</label>
+                        <input type="color" id="color2-${this.id}" value="${this.color2}">
+                    </div>
+                </div>
+            </div>
+            <div class="control-group">
+                <div class="button-row">
+                    <button class="btn" id="toggleCub1-${this.id}" onclick="viewerGroups[${this.id}].toggleCub1()">
+                        隐藏 CUB1
+                    </button>
+                    <button class="btn" id="toggleCub2-${this.id}" onclick="viewerGroups[${this.id}].toggleCub2()">
+                        隐藏 CUB2
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+
+    // 创建映射设置标签页内容
+    createMappingTabContent() {
+        const defaultSettings = (window.ORBITAL_VIEWER_CONFIG && window.ORBITAL_VIEWER_CONFIG.defaultSettings) || {
+            minMapValue: '-0.02',
+            maxMapValue: '0.03'
+        };
+
+        return `
+            <div class="control-group">
+                <div class="mapping-controls">
+                    <button class="btn" id="toggleColorMap-${this.id}" onclick="viewerGroups[${this.id}].toggleColorMapping()">
+                        启用值映射
+                    </button>
+                </div>
+                <div class="mapping-range">
+                    <div class="range-input">
+                        <label>最小值:</label>
+                        <input type="number" id="minMapValue-${this.id}" 
+                               value="${defaultSettings.minMapValue}" 
+                               step="0.001">
+                    </div>
+                    <div class="range-input">
+                        <label>最大值:</label>
+                        <input type="number" id="maxMapValue-${this.id}" 
+                               value="${defaultSettings.maxMapValue}" 
+                               step="0.001">
+                    </div>
+                </div>
+                <div class="mapping-colors">
+                    <div class="color-input">
+                        <label>负值颜色:</label>
+                        <input type="color" id="negativeColor-${this.id}" 
+                               value="#0000FF">
+                    </div>
+                    <div class="color-input">
+                        <label>正值颜色:</label>
+                        <input type="color" id="positiveColor-${this.id}" 
+                               value="#FF0000">
+                    </div>
                 </div>
             </div>
         `;
@@ -1068,7 +1118,7 @@ function saveConfiguration() {
     const config = {
         version: "1.0",
         timestamp: new Date().toISOString(),
-        globalTitle: document.getElementById('global-title').value, // 添加全局标题
+        globalTitle: document.getElementById('global-title').value,
         viewers: viewerGroups.map(group => group.getConfiguration())
     };
 
@@ -1084,8 +1134,6 @@ function saveConfiguration() {
 }
 
 let BASE_PATH = '';
-
-
 
 async function captureAllViewers() {
     // 直接从 DOM 中获取所有查看器组
@@ -1120,7 +1168,7 @@ async function captureAllViewers() {
             const titleInput = element.querySelector('.title-input');
             const title = titleInput ? titleInput.value : '';
 
-            // 创建放大的临��画布
+            // 创建放大的临画布
             const tempCanvas = document.createElement('canvas');
             tempCanvas.width = canvas.width * scale;
             tempCanvas.height = (canvas.height + titleHeight / scale + lineHeight / scale * 2) * scale;
@@ -1158,7 +1206,7 @@ async function captureAllViewers() {
             tempCtx.drawImage(canvas, 0, 0);
             tempCtx.restore();
 
-            // 绘制底部分割线
+            // 绘制底部割线
             tempCtx.beginPath();
             tempCtx.moveTo(0, tempCanvas.height - lineHeight);
             tempCtx.lineTo(tempCanvas.width, tempCanvas.height - lineHeight);
@@ -1204,7 +1252,7 @@ async function captureAllViewers() {
             }
         }
 
-        // 将最终的canvas转换为blob并复制到剪贴板
+        // 将最终的canvas转换为blob并复制到剪贴���
         finalCanvas.toBlob(async (blob) => {
             try {
                 const item = new ClipboardItem({ "image/png": blob });
@@ -1264,7 +1312,7 @@ async function loadConfiguration(event) {
             const container = document.getElementById('viewers-container');
             container.insertAdjacentHTML('beforeend', newGroup.createHTML());
 
-            // 先初始化���看器
+            // 先初始化看器
             newGroup.initialize();
 
             // 然后载配置
@@ -1317,12 +1365,10 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     } else {
         // 如果没有配置数据，创建默认的查看器组
-        console.log('没有检测到配置数据，创建默认查看器组');
+        console.log('没有检测到配置数据，创建默认看器组');
         addNewViewerGroup();
     }
 });
-
-
 
 // 添加状态验证函数
 function validateViewerGroupsState() {
