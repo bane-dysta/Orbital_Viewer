@@ -483,6 +483,24 @@ class ViewerGroup {
             group.color2 = this.value;
             group.updateSurfaces();
         });
+
+        // 添加映射设置相关的事件监听器
+        const mappingToggle = document.getElementById(`enableMapping-${this.id}`);
+        if (mappingToggle) {
+            mappingToggle.addEventListener('change', () => {
+                this.toggleColorMapping();
+            });
+        }
+
+        // 添加映射值和颜色变化的监听器
+        ['minMapValue', 'maxMapValue', 'negativeColor', 'positiveColor'].forEach(id => {
+            const element = document.getElementById(`${id}-${this.id}`);
+            if (element) {
+                element.addEventListener('change', () => {
+                    this.updateColorMapping();
+                });
+            }
+        });
     }
 
     // 自动加载文件
@@ -754,7 +772,7 @@ class ViewerGroup {
                 const radius1 = this.getCovalentRadius(atom1.elem);
                 const radius2 = this.getCovalentRadius(atom2.elem);
 
-                // ���整键长判断标准，使用共价半径之和的1.3倍作为阈值
+                // 整键长判断标准，���用共价半径之和的1.3倍作为阈值
                 if (distance < (radius1 + radius2) * 1.3) {
                     // 根据原子大小调整键的粗细
                     const bondRadius = Math.min(radius1, radius2) * 0.25;  // 键的半径设为较小原子半径的1/4
@@ -799,8 +817,8 @@ class ViewerGroup {
                 <div class="viewer-container">
                     <div class="viewer-controls">
                         <div class="tabs">
-                            <button class="tab-btn active" onclick="switchTab(${this.id}, 'basic')">基础设置</button>
-                            <button class="tab-btn" onclick="switchTab(${this.id}, 'mapping')">映射设置</button>
+                            <button class="tab-btn active" data-tab="basic" onclick="switchTab(${this.id}, 'basic')">基础设置</button>
+                            <button class="tab-btn" data-tab="mapping" onclick="switchTab(${this.id}, 'mapping')">映射设置</button>
                         </div>
                         
                         <div id="basic-tab-${this.id}" class="tab-content active">
@@ -997,6 +1015,18 @@ class ViewerGroup {
             const title = titleInput ? titleInput.value : '未知';
             console.log(`- DOM ID: ${id}, 标题: ${title}`);
         });
+    }
+
+    updateColorMapping() {
+        if (!this.isColorMappingEnabled) return;
+        
+        const minValue = parseFloat(document.getElementById(`minMapValue-${this.id}`).value);
+        const maxValue = parseFloat(document.getElementById(`maxMapValue-${this.id}`).value);
+        const negativeColor = document.getElementById(`negativeColor-${this.id}`).value;
+        const positiveColor = document.getElementById(`positiveColor-${this.id}`).value;
+
+        // 更新表面显示
+        this.updateSurfaces();
     }
 }
 
@@ -1263,7 +1293,7 @@ document.getElementById('global-title').addEventListener('input', function () {
 document.addEventListener('DOMContentLoaded', function () {
     // 检查是否有配置数据
     if (window.ORBITAL_VIEWER_CONFIG && window.ORBITAL_VIEWER_CONFIG.configData) {
-        console.log('正���加载配置:', window.ORBITAL_VIEWER_CONFIG);
+        console.log('正在加载配置:', window.ORBITAL_VIEWER_CONFIG);
         const config = window.ORBITAL_VIEWER_CONFIG.configData;
 
         // 设置全局标题
@@ -1272,7 +1302,7 @@ document.addEventListener('DOMContentLoaded', function () {
             document.title = config.globalTitle;
         }
 
-        // 清除现有查看器���
+        // 清除现有查看器组
         document.getElementById('viewers-container').innerHTML = '';
         viewerGroups.length = 0;
 
@@ -1319,5 +1349,20 @@ function validateViewerGroupsState() {
             console.error(`ID 不匹配 - DOM: ${domId}, Array: ${arrayId}`);
         }
     });
+}
+
+// 添加全局 switchTab 函数
+function switchTab(groupId, tabName) {
+    // 获取所有选项卡按钮和内容
+    const tabBtns = document.querySelectorAll(`#group-${groupId} .tab-btn`);
+    const tabContents = document.querySelectorAll(`#group-${groupId} .tab-content`);
+    
+    // 移除所有active类
+    tabBtns.forEach(btn => btn.classList.remove('active'));
+    tabContents.forEach(content => content.classList.remove('active'));
+    
+    // 添加active类到选中的选项卡
+    document.querySelector(`#group-${groupId} .tab-btn[data-tab="${tabName}"]`).classList.add('active');
+    document.querySelector(`#group-${groupId} #${tabName}-tab-${groupId}`).classList.add('active');
 }
 
