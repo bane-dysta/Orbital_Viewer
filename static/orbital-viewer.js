@@ -183,12 +183,6 @@ class ViewerGroup {
     toggleColorMapping() {
         this.isColorMappingEnabled = !this.isColorMappingEnabled;
         
-        // 更新按钮文本
-        const btn = document.getElementById(`toggleColorMap-${this.id}`);
-        if (btn) {
-            btn.textContent = this.isColorMappingEnabled ? '关闭值映射' : '启用值映射';
-        }
-        
         // 更新颜色选择器的状态
         const color1Input = document.getElementById(`color1-${this.id}`);
         const color2Input = document.getElementById(`color2-${this.id}`);
@@ -197,7 +191,14 @@ class ViewerGroup {
             color2Input.disabled = this.isColorMappingEnabled;
         }
         
-        // 更新显示
+        // 更新开关按钮的文本
+        const toggleBtn = document.getElementById(`toggleColorMap-${this.id}`);
+        if (toggleBtn) {
+            toggleBtn.textContent = this.isColorMappingEnabled ? '关闭值映射' : '启用值映射';
+            toggleBtn.classList.toggle('active', this.isColorMappingEnabled);
+        }
+        
+        // 更新表面显示
         this.updateSurfaces();
     }
 
@@ -357,7 +358,7 @@ class ViewerGroup {
 
         viewerEl.addEventListener('drop', (e) => {
             if (e.dataTransfer.types.includes('Files')) {
-                dragCounter = 0; // 重置计数器
+                dragCounter = 0; // ���置计数器
                 dropZone.classList.remove('active');
                 e.preventDefault();
                 e.stopPropagation();
@@ -378,7 +379,7 @@ class ViewerGroup {
         return files.sort((a, b) => a.name.localeCompare(b.name));
     }
 
-    // 处理上传的文件
+    // 处理传的文件
     async handleFiles(newFiles) {
         // 过滤出 .cube/.cub 文件
         const cubeFiles = Array.from(newFiles).filter(file =>
@@ -525,7 +526,7 @@ class ViewerGroup {
                 this.updateSurfaces();
             }
 
-            // 仅当 fileName2 有实际值（非空字符串）时才尝试加载第二个文件
+            // 仅当 fileName2 有实际值（非空字符串）时尝试加载第二个文件
             if (this.fileName2 && this.fileName2.trim() !== '') {
                 const response2 = await fetch(this.fileName2);
                 if (!response2.ok) {
@@ -627,7 +628,7 @@ class ViewerGroup {
         this.viewer.render();
     }
 
-    // 获取补色的辅助方法
+    // 获取补的辅助方法
     getComplementaryColor(hexColor) {
         // 移除#号
         const hex = hexColor.replace('#', '');
@@ -772,7 +773,7 @@ class ViewerGroup {
                 const radius1 = this.getCovalentRadius(atom1.elem);
                 const radius2 = this.getCovalentRadius(atom2.elem);
 
-                // 整键长判断标准，���用共价半径之和的1.3倍作为阈值
+                // 整键长判断标准，用共价半径之和的1.3倍作为阈值
                 if (distance < (radius1 + radius2) * 1.3) {
                     // 根据原子大小调整键的粗细
                     const bondRadius = Math.min(radius1, radius2) * 0.25;  // 键的半径设为较小原子半径的1/4
@@ -857,40 +858,34 @@ class ViewerGroup {
                         <div id="mapping-tab-${this.id}" class="tab-content">
                             <div class="control-group">
                                 <div class="mapping-controls">
-                                    <label class="switch">
-                                        <input type="checkbox" id="enableMapping-${this.id}" onchange="viewerGroups[${this.id}].toggleColorMapping()">
-                                        <span class="slider round"></span>
-                                    </label>
-                                    <span>启用值映射</span>
+                                    <button class="btn" id="toggleColorMap-${this.id}" onclick="viewerGroups[${this.id}].toggleColorMapping()">
+                                        启用值映射
+                                    </button>
                                 </div>
                                 <div class="mapping-range">
                                     <div class="range-input">
                                         <label>最小值:</label>
                                         <input type="number" id="minMapValue-${this.id}" 
                                                value="${defaultSettings.minMapValue}" 
-                                               step="0.001"
-                                               onchange="viewerGroups[${this.id}].updateColorMapping()">
+                                               step="0.001">
                                     </div>
                                     <div class="range-input">
                                         <label>最大值:</label>
                                         <input type="number" id="maxMapValue-${this.id}" 
                                                value="${defaultSettings.maxMapValue}" 
-                                               step="0.001"
-                                               onchange="viewerGroups[${this.id}].updateColorMapping()">
+                                               step="0.001">
                                     </div>
                                 </div>
                                 <div class="mapping-colors">
                                     <div class="color-input">
                                         <label>负值颜色:</label>
                                         <input type="color" id="negativeColor-${this.id}" 
-                                               value="#0000FF"
-                                               onchange="viewerGroups[${this.id}].updateColorMapping()">
+                                               value="#0000FF">
                                     </div>
                                     <div class="color-input">
                                         <label>正值颜色:</label>
                                         <input type="color" id="positiveColor-${this.id}" 
-                                               value="#FF0000"
-                                               onchange="viewerGroups[${this.id}].updateColorMapping()">
+                                               value="#FF0000">
                                     </div>
                                 </div>
                             </div>
@@ -928,7 +923,7 @@ class ViewerGroup {
             }
             viewerGroups.splice(index, 1);
             
-            // 3. 重新分配所有 id
+            // 3. 新分配所有 id
             this.reassignIds();
             
             console.log('删除完成，当前轨道组数量:', viewerGroups.length);
@@ -1296,7 +1291,7 @@ document.addEventListener('DOMContentLoaded', function () {
         console.log('正在加载配置:', window.ORBITAL_VIEWER_CONFIG);
         const config = window.ORBITAL_VIEWER_CONFIG.configData;
 
-        // 设置全局标题
+        // 设置全局标���
         if (config.globalTitle) {
             document.getElementById('global-title').value = config.globalTitle;
             document.title = config.globalTitle;
