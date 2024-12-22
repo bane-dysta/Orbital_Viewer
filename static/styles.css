@@ -126,6 +126,8 @@
     border: 1px solid #ccc;
     border-radius: 4px;
     position: relative;
+    overflow: hidden;
+    z-index: 1;
 }
 
 .drop-zone {
@@ -143,11 +145,13 @@
     justify-content: center;
     pointer-events: none;
     opacity: 0;
-    transition: opacity 0.3s;
+    transition: opacity 0.2s ease;
+    z-index: 100;
 }
 
 .drop-zone.active {
     opacity: 1;
+    pointer-events: auto;
     background: rgba(0, 150, 255, 0.1);
     border-color: #0096ff;
 }
@@ -161,10 +165,11 @@
 .file-list {
     margin-top: 8px;
     padding: 8px;
-    background: #fff;
+    background: rgba(255, 255, 255, 0.9);
     border-radius: 4px;
     max-height: 80px;
     overflow-y: auto;
+    z-index: 11;
 }
 
 .file-item {
@@ -221,6 +226,7 @@ input[type="number"] {
 .button-row {
     display: flex;
     gap: 4px;
+    margin-bottom: 4px;
 }
 
 .button-row .btn {
@@ -442,4 +448,31 @@ input[type="color"] {
     height: 4px;
     margin: 10px 0;
     transition: all 0.2s;
+}
+
+/* 添加禁用状态的样式 */
+input[type="color"]:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* 修改按钮样式 */
+.button-row {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 4px;
+}
+
+/* 修改值映射按钮样式 */
+[id^="toggleColorMap-"] {
+    background-color: #673ab7;
+    width: 100%;
+}
+
+[id^="toggleColorMap-"]:hover {
+    background-color: #5e35b1;
+}
+
+[id^="toggleColorMap-"].active {
+    background-color: #4527a0;
 }

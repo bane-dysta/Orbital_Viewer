@@ -115,19 +115,36 @@ class ViewerGroup {
         this.isInitialized = false; // 初始化标志
         this.showCub1 = true;  // 新增：控制 cub1 的显示状态
         this.showCub2 = true;  // 新增：控制 cub2 的显示状态
-
+        this.isColorMappingEnabled = false; // 新增：控制是否启用值映射染色
     }
     async initialize() {
         if (this.isInitialized) return;
 
+        // 创建3Dmol查看器，启用默认的拖动和缩放功能
         this.viewer = $3Dmol.createViewer(`viewer-${this.id}`, {
-            backgroundColor: "white"
+            backgroundColor: "white",
+            id: `viewer-${this.id}`,
+            // 添加交互选项
+            defaultcolors: $3Dmol.rasmolElementColors,
+            control: {
+                dragScale: 0.5, // 拖动灵敏度
+                scrollScale: 0.5, // 滚轮缩放灵敏度
+                rotateSpeed: 0.5 // 旋转速度
+            }
         });
+
+        // 设置默认视图控制
+        this.viewer.setStyle({}, {stick:{}, sphere:{}});
+        this.viewer.setClickable({}, true, function(atom){
+            console.log("Atom clicked: " + atom.elem + " " + atom.serial);
+        });
+        this.viewer.render();
 
         this.setupEventListeners();
         this.setupDropZone();
         this.isInitialized = true;
 
+        // 等待DOM更新
         await new Promise(resolve => setTimeout(resolve, 100));
     }
 
@@ -145,6 +162,28 @@ class ViewerGroup {
         this.updateSurfaces();
         // 更新按钮文本
         $(`#toggleCub2-${this.id}`).text(this.showCub2 ? '隐藏 CUB2' : '显示 CUB2');
+    }
+
+    // 添加切换染色模式的方法
+    toggleColorMapping() {
+        this.isColorMappingEnabled = !this.isColorMappingEnabled;
+        
+        // 更新按钮文本
+        const btn = document.getElementById(`toggleColorMap-${this.id}`);
+        if (btn) {
+            btn.textContent = this.isColorMappingEnabled ? '关闭值映射' : '启用值映射';
+        }
+        
+        // 更新颜色选择器的状态
+        const color1Input = document.getElementById(`color1-${this.id}`);
+        const color2Input = document.getElementById(`color2-${this.id}`);
+        if (color1Input && color2Input) {
+            color1Input.disabled = this.isColorMappingEnabled;
+            color2Input.disabled = this.isColorMappingEnabled;
+        }
+        
+        // 更新显示
+        this.updateSurfaces();
     }
 
     takeScreenshot() {
@@ -264,48 +303,56 @@ class ViewerGroup {
         const dropZone = document.createElement('div');
         dropZone.className = 'drop-zone';
         dropZone.innerHTML = `
-                    <div class="drop-zone-text">拖放 .cube 文件到此处</div>
-                    <div class="file-list"></div>
-                `;
+            <div class="drop-zone-text">拖放 .cube 文件到此处</div>
+            <div class="file-list"></div>
+        `;
         viewerEl.appendChild(dropZone);
 
-        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-            viewerEl.addEventListener(eventName, (e) => {
-                // 如果在排序模式下，阻止所有文件拖放相关事件
-                if (isDraggingEnabled) {
-                    return;
+        let dragCounter = 0; // 添加计数器避免闪烁
+
+        // 文件拖放相关事件
+        viewerEl.addEventListener('dragenter', (e) => {
+            if (e.dataTransfer.types.includes('Files')) {
+                dragCounter++;
+                if (dragCounter === 1) { // 只在第一次进入时显示
+                    dropZone.classList.add('active');
                 }
                 e.preventDefault();
                 e.stopPropagation();
-            }, false);
-        });
+            }
+        }, false);
 
-        ['dragenter', 'dragover'].forEach(eventName => {
-            viewerEl.addEventListener(eventName, () => {
-                // 在排序模式下不显示拖放区域
-                if (isDraggingEnabled) {
-                    return;
+        viewerEl.addEventListener('dragover', (e) => {
+            if (e.dataTransfer.types.includes('Files')) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+        }, false);
+
+        viewerEl.addEventListener('dragleave', (e) => {
+            if (e.dataTransfer.types.includes('Files')) {
+                dragCounter--;
+                if (dragCounter === 0) { // 只在完全离开时隐藏
+                    dropZone.classList.remove('active');
                 }
-                dropZone.classList.add('active');
-            }, false);
-        });
-
-        ['dragleave', 'drop'].forEach(eventName => {
-            viewerEl.addEventListener(eventName, () => {
-                dropZone.classList.remove('active');
-            }, false);
-        });
+                e.preventDefault();
+                e.stopPropagation();
+            }
+        }, false);
 
         viewerEl.addEventListener('drop', (e) => {
-            // 在排序模式下不处理文件拖放
-            if (isDraggingEnabled) {
-                return;
-            }
-            const files = Array.from(e.dataTransfer.files)
-                .filter(file => file.name.endsWith('.cube') || file.name.endsWith('.cub'));
+            if (e.dataTransfer.types.includes('Files')) {
+                dragCounter = 0; // 重置计数器
+                dropZone.classList.remove('active');
+                e.preventDefault();
+                e.stopPropagation();
 
-            if (files.length > 0) {
-                this.handleFiles(files);
+                const files = Array.from(e.dataTransfer.files)
+                    .filter(file => file.name.endsWith('.cube') || file.name.endsWith('.cub'));
+
+                if (files.length > 0) {
+                    this.handleFiles(files);
+                }
             }
         }, false);
     }
@@ -405,12 +452,6 @@ class ViewerGroup {
             group.title = this.value;
         });
 
-        // 缩放滑块
-        $(`#surfaceScale-${this.id}`).on('input', function () {
-            $(`#scaleDisplay-${group.id}`).text(this.value);
-            group.updateSurfaces();
-        });
-
         // 密度值输入
         $(`#isoValue-${this.id}`).on('change', function () {
             group.updateSurfaces();
@@ -479,51 +520,64 @@ class ViewerGroup {
         this.viewer.clear();
         this.displayMolecule();
 
-        const surfaceScale = parseFloat($(`#surfaceScale-${this.id}`).val());
-        const isoValue = parseFloat($(`#isoValue-${this.id}`).val());
+        const isoValue = parseFloat(document.getElementById(`isoValue-${this.id}`).value);
 
-        // 显示第一个文件
-        if (this.currentData1 && this.showCub1) {
-            this.currentVolumeId1 = this.viewer.addVolumetricData(this.currentData1, "cube", {
-                isoval: isoValue / surfaceScale,
-                color: this.color1,
-                opacity: 0.85,
-                wireframe: false,
-                origin: this.origin,
-                dimensional: true
-            });
+        if (this.currentData1) {
+            if (this.isColorMappingEnabled && this.currentData2) {
+                // 使用值映射模式
+                this.viewer.addVolumetricData(this.currentData1, "cube", {
+                    isoval: isoValue,
+                    colormap: 'RWB', // 红白蓝配色
+                    mapData: this.currentData2, // 用于染色的数据
+                    opacity: 0.85,
+                    wireframe: false,
+                    origin: this.origin,
+                    dimensional: true
+                });
+            } else {
+                // 使用原来的模式
+                if (this.showCub1) {
+                    this.currentVolumeId1 = this.viewer.addVolumetricData(this.currentData1, "cube", {
+                        isoval: isoValue,
+                        color: this.color1,
+                        opacity: 0.85,
+                        wireframe: false,
+                        origin: this.origin,
+                        dimensional: true
+                    });
 
-            const negativeColor = this.getComplementaryColor(this.color1);
-            this.viewer.addVolumetricData(this.currentData1, "cube", {
-                isoval: -isoValue / surfaceScale,
-                color: negativeColor,
-                opacity: 0.85,
-                wireframe: false,
-                origin: this.origin,
-                dimensional: true
-            });
+                    const negativeColor = this.getComplementaryColor(this.color1);
+                    this.viewer.addVolumetricData(this.currentData1, "cube", {
+                        isoval: -isoValue,
+                        color: negativeColor,
+                        opacity: 0.85,
+                        wireframe: false,
+                        origin: this.origin,
+                        dimensional: true
+                    });
+                }
 
-        }
+                if (this.showCub2 && this.currentData2) {
+                    this.currentVolumeId2 = this.viewer.addVolumetricData(this.currentData2, "cube", {
+                        isoval: isoValue,
+                        color: this.color2,
+                        opacity: 0.85,
+                        wireframe: false,
+                        origin: this.origin,
+                        dimensional: true
+                    });
 
-        // 如果有第二个文件则显示
-        if (this.currentData2 && this.showCub2) {
-            this.currentVolumeId2 = this.viewer.addVolumetricData(this.currentData2, "cube", {
-                isoval: isoValue / surfaceScale,
-                color: this.color2,
-                opacity: 0.85,
-                wireframe: false,
-                origin: this.origin,
-                dimensional: true
-            });
-            const negativeColor = this.getComplementaryColor(this.color2);
-            this.viewer.addVolumetricData(this.currentData2, "cube", {
-                isoval: -isoValue / surfaceScale,
-                color: negativeColor,
-                opacity: 0.85,
-                wireframe: false,
-                origin: this.origin,
-                dimensional: true
-            });
+                    const negativeColor = this.getComplementaryColor(this.color2);
+                    this.viewer.addVolumetricData(this.currentData2, "cube", {
+                        isoval: -isoValue,
+                        color: negativeColor,
+                        opacity: 0.85,
+                        wireframe: false,
+                        origin: this.origin,
+                        dimensional: true
+                    });
+                }
+            }
         }
 
         this.viewer.render();
@@ -704,11 +758,10 @@ class ViewerGroup {
     // 创建HTML结构
     createHTML() {
         const defaultSettings = (window.ORBITAL_VIEWER_CONFIG && window.ORBITAL_VIEWER_CONFIG.defaultSettings) || {
-            isoValue: '0.002',
-            surfaceScale: '2.0'
+            isoValue: '0.002'
         };
         return `
-            <div class="viewer-group" id="group-${this.id}" draggable="false">
+            <div class="viewer-group" id="group-${this.id}">
                 <div class="viewer-header">
                     <input type="text" class="title-input" id="title-${this.id}" value="${this.title}">
                     <div class="close-btn-container">
@@ -722,10 +775,6 @@ class ViewerGroup {
                                 <div>
                                     <label for="isoValue-${this.id}">等值面值:</label>
                                     <input type="number" id="isoValue-${this.id}" value="${defaultSettings.isoValue}" step="0.001">
-                                </div>
-                                <div class="slider-container">
-                                    <label>等值面缩放: <span id="scaleDisplay-${this.id}">${defaultSettings.surfaceScale}</span></label>
-                                    <input type="range" id="surfaceScale-${this.id}" min="0.5" max="5.0" step="0.1" value="${defaultSettings.surfaceScale}">
                                 </div>
                             </div>
                         </div>
@@ -742,6 +791,11 @@ class ViewerGroup {
                             </div>
                         </div>
                         <div class="control-group">
+                            <div class="button-row">
+                                <button class="btn" id="toggleColorMap-${this.id}" onclick="viewerGroups[${this.id}].toggleColorMapping()">
+                                    启用值映射
+                                </button>
+                            </div>
                             <div class="button-row">
                                 <button class="btn" id="toggleCub1-${this.id}" onclick="viewerGroups[${this.id}].toggleCub1()">
                                     隐藏 CUB1
@@ -771,10 +825,6 @@ class ViewerGroup {
                             <label for="isoValue-${this.id}">等值面值:</label>
                             <input type="number" id="isoValue-${this.id}" value="${defaultSettings.isoValue}" step="0.001">
                         </div>
-                        <div class="slider-container">
-                            <label>等值面缩放: <span id="scaleDisplay-${this.id}">${defaultSettings.surfaceScale}</span></label>
-                            <input type="range" id="surfaceScale-${this.id}" min="0.5" max="5.0" step="0.1" value="${defaultSettings.surfaceScale}">
-                        </div>
                     </div>
                 </div>
                 <div class="control-group">
@@ -790,6 +840,11 @@ class ViewerGroup {
                     </div>
                 </div>
                 <div class="control-group">
+                    <div class="button-row">
+                        <button class="btn" id="toggleColorMap-${this.id}" onclick="viewerGroups[${this.id}].toggleColorMapping()">
+                            启用值映射
+                        </button>
+                    </div>
                     <div class="button-row">
                         <button class="btn" id="toggleCub1-${this.id}" onclick="viewerGroups[${this.id}].toggleCub1()">
                             隐藏 CUB1
@@ -877,17 +932,6 @@ class ViewerGroup {
                 const isoValueInput = element.querySelector(`input[id^="isoValue-"]`);
                 if (isoValueInput) {
                     isoValueInput.id = `isoValue-${newId}`;
-                }
-                
-                // 更新缩放控制
-                const surfaceScaleInput = element.querySelector(`input[id^="surfaceScale-"]`);
-                if (surfaceScaleInput) {
-                    surfaceScaleInput.id = `surfaceScale-${newId}`;
-                }
-                
-                const scaleDisplay = element.querySelector(`span[id^="scaleDisplay-"]`);
-                if (scaleDisplay) {
-                    scaleDisplay.id = `scaleDisplay-${newId}`;
                 }
                 
                 // 更新关闭按钮的 onclick 事件
