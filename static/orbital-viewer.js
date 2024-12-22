@@ -277,7 +277,7 @@ class ViewerGroup {
         document.querySelector(`#group-${this.id} #${tabName}-tab-${this.id}`).classList.add('active');
     }
 
-    // 添加切换染色模式的��法
+    // 添加切换染色模式的方法
     toggleColorMapping() {
         this.isColorMappingEnabled = !this.isColorMappingEnabled;
         
@@ -302,35 +302,20 @@ class ViewerGroup {
 
     takeScreenshot() {
         try {
-            // 获取查看器的 canvas 元素
-            const canvas = document.querySelector(`#viewer-${this.id} canvas`);
-            if (!canvas) {
-                throw new Error('找不到 canvas 元素');
-            }
-
-            // 创建一个新的 canvas 来处理截图
-            const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = canvas.width;
-            tempCanvas.height = canvas.height;
-            const ctx = tempCanvas.getContext('2d');
-            ctx.fillStyle = 'white';
-            ctx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
-            ctx.drawImage(canvas, 0, 0);
-
-            // 将 canvas 转换为 blob
-            tempCanvas.toBlob((blob) => {
-                // 创建一个新的 ClipboardItem
-                const item = new ClipboardItem({ "image/png": blob });
-
-                // 写入剪贴板
-                navigator.clipboard.write([item]).then(() => {
-                    this.showToast('截图已复制到剪贴板');
-                }).catch((err) => {
-                    console.error('复制到剪贴板失败:', err);
-                    this.showError('复制到剪贴板失败');
-                });
-            }, 'image/png');
-
+            const screenshotManager = new ScreenshotManager();
+            screenshotManager.captureViewer(document.querySelector(`#group-${this.id}`)).then(screenshot => {
+                if (screenshot) {
+                    screenshot.canvas.toBlob((blob) => {
+                        const item = new ClipboardItem({ "image/png": blob });
+                        navigator.clipboard.write([item]).then(() => {
+                            this.showToast('截图已复制到剪贴板');
+                        }).catch((err) => {
+                            console.error('复制到剪贴板失败:', err);
+                            this.showError('复制到剪贴板失败');
+                        });
+                    }, 'image/png');
+                }
+            });
         } catch (error) {
             console.error('截图失败:', error);
             this.showError('截图失败');
@@ -499,7 +484,7 @@ class ViewerGroup {
             file.name.endsWith('.cube') || file.name.endsWith('.cub')
         );
 
-        // 如果当前已有两个文件，则清空列表重新开始
+        // 如果当前已有两个文件，则清空表重新开始
         if (this.uploadedFiles.length >= 2) {
             console.log('文件列表已满，清空现有文件并重新加载');
             this.uploadedFiles = [];
@@ -522,7 +507,7 @@ class ViewerGroup {
                 this.currentData1 = await this.readFile(firstFile);
                 this.atomList = this.parseCubeFile(this.currentData1);
 
-                // 更新界面显示
+                // 更新界面显��
                 const baseName = this.fileName1.replace(/\.[^/.]+$/, "");
                 $(`#title-${this.id}`).val(baseName);
                 this.title = baseName;
@@ -647,7 +632,7 @@ class ViewerGroup {
                 }
                 this.currentData2 = await response2.text();
 
-                // 更新显示以包含第二个文件
+                // 更新显示以含第二个文件
                 this.updateSurfaces();
             }
 
@@ -753,7 +738,7 @@ class ViewerGroup {
         const gComplement = 255 - g;
         const bComplement = 255 - b;
 
-        // 转回十进制
+        // 转回十制
         return '#' +
             rComplement.toString(16).padStart(2, '0') +
             gComplement.toString(16).padStart(2, '0') +
@@ -1115,7 +1100,7 @@ class ViewerGroup {
                     isoValueInput.id = `isoValue-${newId}`;
                 }
                 
-                // 更新关闭按钮的 onclick ��件
+                // 更新关闭按钮的 onclick 件
                 const closeBtn = element.querySelector('.close-btn');
                 if (closeBtn) {
                     closeBtn.setAttribute('onclick', `viewerGroups[${newId}].close()`);
@@ -1226,195 +1211,109 @@ function saveConfiguration() {
 
 let BASE_PATH = '';
 
+// 添加备注解析函数
+function parseNotes(notes) {
+    if (!notes) return { title: '', pairs: [] };
+    
+    const lines = notes.trim().split('\n');
+    let title = '';
+    const pairs = [];
+    
+    // 处理每一行
+    lines.forEach((line, index) => {
+        line = line.trim();
+        if (!line) return;
+        
+        // 检查是否包含冒号或等号
+        if (line.includes(':') || line.includes('=')) {
+            const [key, ...valueParts] = line.split(/[:=]/);
+            const value = valueParts.join('').trim();
+            pairs.push({ key: key.trim(), value });
+        } else if (index === 0) {
+            // 如果第一行不包含分隔符，将其视为标题
+            title = line;
+        }
+    });
+    
+    return { title, pairs };
+}
+
+// 添加表格绘制函数
+function drawNotesTable(ctx, parsedNotes, x, y, maxWidth) {
+    const { title, pairs } = parsedNotes;
+    if (!title && pairs.length === 0) return 0;
+
+    const scale = 2; // 保持与原有缩放一致
+    const padding = 20 * scale;
+    const cellPadding = 10 * scale;
+    const fontSize = 36 * scale;
+    const headerFontSize = 48 * scale;
+    const rowHeight = fontSize + cellPadding * 2;
+    const headerHeight = headerFontSize + cellPadding * 2;
+    
+    // 设置字体
+    ctx.font = `${fontSize}px Arial`;
+    
+    // 计算列宽
+    let keyColumnWidth = 0;
+    let valueColumnWidth = 0;
+    pairs.forEach(({ key, value }) => {
+        const keyWidth = ctx.measureText(key).width + cellPadding * 2;
+        const valueWidth = ctx.measureText(value).width + cellPadding * 2;
+        keyColumnWidth = Math.max(keyColumnWidth, keyWidth);
+        valueColumnWidth = Math.max(valueColumnWidth, valueWidth);
+    });
+    
+    // 确保表格不超过最大宽度
+    const tableWidth = Math.min(maxWidth - padding * 2, keyColumnWidth + valueColumnWidth);
+    
+    // 绘制标题（如果有）
+    let currentY = y + padding;
+    if (title) {
+        ctx.font = `bold ${headerFontSize}px Arial`;
+        ctx.fillStyle = '#333';
+        ctx.textAlign = 'center';
+        ctx.fillText(title, x + tableWidth / 2, currentY + headerHeight / 2);
+        currentY += headerHeight;
+        
+        // 绘制标题下的分隔线
+        ctx.beginPath();
+        ctx.strokeStyle = '#ddd';
+        ctx.lineWidth = 2 * scale;
+        ctx.moveTo(x, currentY);
+        ctx.lineTo(x + tableWidth, currentY);
+        ctx.stroke();
+    }
+    
+    // 绘制数据行
+    ctx.font = `${fontSize}px Arial`;
+    pairs.forEach(({ key, value }) => {
+        // 绘制键
+        ctx.fillStyle = '#666';
+        ctx.textAlign = 'right';
+        ctx.fillText(key, x + keyColumnWidth - cellPadding, currentY + rowHeight / 2);
+        
+        // 绘制值
+        ctx.textAlign = 'left';
+        ctx.fillText(value, x + keyColumnWidth + cellPadding, currentY + rowHeight / 2);
+        
+        // 绘制分隔线
+        currentY += rowHeight;
+        ctx.beginPath();
+        ctx.strokeStyle = '#ddd';
+        ctx.lineWidth = 1 * scale;
+        ctx.moveTo(x, currentY);
+        ctx.lineTo(x + tableWidth, currentY);
+        ctx.stroke();
+    });
+    
+    return currentY - y; // 返回表格总度
+}
+
+// 修改 captureAllViewers 函数中的备注渲染部分
 async function captureAllViewers() {
-    // 直接从 DOM 中获取所有查看器组
-    const viewerElements = document.querySelectorAll('.viewer-group');
-    if (viewerElements.length === 0) {
-        alert('没有可用的轨道组！');
-        return;
-    }
-
-    try {
-        const finalCanvas = document.createElement('canvas');
-        const ctx = finalCanvas.getContext('2d');
-
-        // 缩放因子和间距
-        const scale = 2;
-        const padding = 40 * scale;
-        const titleHeight = 80 * scale;
-        const lineHeight = 2 * scale;
-        const notesLineHeight = 36 * scale; // 备注的行高
-        const maxNotesLines = 5; // 最大显示5行备注
-        const notesHeight = notesLineHeight * maxNotesLines; // 备注区域高度
-
-        // 获取所有有效的截图
-        const screenshots = [];
-        let maxWidth = 0;
-        let maxHeight = 0;
-
-        // 遍历所有查看器组元素
-        for (const element of viewerElements) {
-            // 获取查看器组的 canvas
-            const canvas = element.querySelector('.viewer canvas');
-            if (!canvas) continue;
-
-            // 获取标题
-            const titleInput = element.querySelector('.title-input');
-            const title = titleInput ? titleInput.value : '';
-
-            // 获取备注内容
-            const notesArea = element.querySelector('.notes-area');
-            const notes = notesArea ? notesArea.value : '';
-
-            // 创建放大的临时画布
-            const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = canvas.width * scale;
-            tempCanvas.height = (canvas.height + titleHeight + notesHeight + lineHeight * 3) * scale;
-            const tempCtx = tempCanvas.getContext('2d');
-
-            // 设置背景
-            tempCtx.fillStyle = 'white';
-            tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
-
-            // 绘制上方分割线
-            tempCtx.strokeStyle = '#ddd';
-            tempCtx.lineWidth = lineHeight;
-            tempCtx.beginPath();
-            tempCtx.moveTo(0, 0);
-            tempCtx.lineTo(tempCanvas.width, 0);
-            tempCtx.stroke();
-
-            // 添加标题
-            tempCtx.fillStyle = '#333';
-            tempCtx.font = `bold ${64 * scale}px Arial`;
-            tempCtx.textAlign = 'center';
-            tempCtx.textBaseline = 'middle';
-            tempCtx.fillText(title, tempCanvas.width / 2, titleHeight / 2);
-
-            // 绘制标题下方分割线
-            tempCtx.beginPath();
-            tempCtx.moveTo(0, titleHeight);
-            tempCtx.lineTo(tempCanvas.width, titleHeight);
-            tempCtx.stroke();
-
-            // 添加备注
-            if (notes) {
-                tempCtx.font = `${36 * scale}px Arial`;
-                tempCtx.fillStyle = '#666';
-                tempCtx.textAlign = 'left';
-                
-                // 自动换行显示备注
-                const words = notes.split(' ');
-                let line = '';
-                let y = titleHeight + notesLineHeight;
-                let lineCount = 0;
-                
-                for (let i = 0; i < words.length && lineCount < maxNotesLines; i++) {
-                    const testLine = line + words[i] + ' ';
-                    const metrics = tempCtx.measureText(testLine);
-                    const testWidth = metrics.width;
-
-                    if (testWidth > tempCanvas.width - 40 * scale && i > 0) {
-                        // 如果是最后一行且还有更多内容，添加省略号
-                        if (lineCount === maxNotesLines - 1 && i < words.length - 1) {
-                            tempCtx.fillText(line + '...', 20 * scale, y);
-                        } else {
-                            tempCtx.fillText(line, 20 * scale, y);
-                        }
-                        line = words[i] + ' ';
-                        y += notesLineHeight;
-                        lineCount++;
-                    } else {
-                        line = testLine;
-                    }
-                }
-                
-                // 绘制最后一行
-                if (line && lineCount < maxNotesLines) {
-                    tempCtx.fillText(line, 20 * scale, y);
-                }
-            }
-
-            // 绘制备注下方分割线
-            tempCtx.beginPath();
-            tempCtx.moveTo(0, titleHeight + notesHeight + lineHeight);
-            tempCtx.lineTo(tempCanvas.width, titleHeight + notesHeight + lineHeight);
-            tempCtx.stroke();
-
-            // 绘制内容
-            tempCtx.save();
-            tempCtx.translate(0, titleHeight + notesHeight + lineHeight * 2);
-            tempCtx.scale(scale, scale);
-            tempCtx.drawImage(canvas, 0, 0);
-            tempCtx.restore();
-
-            screenshots.push({
-                canvas: tempCanvas,
-                width: tempCanvas.width,
-                height: tempCanvas.height
-            });
-
-            maxWidth = Math.max(maxWidth, tempCanvas.width);
-            maxHeight = Math.max(maxHeight, tempCanvas.height);
-        }
-
-        // 计算网格布局
-        const { rows, cols } = calculateGridDimensions(screenshots.length);
-
-        // 计算最终画布的大小
-        const totalWidth = (maxWidth + padding) * cols - padding;
-        const totalHeight = (maxHeight + padding) * rows - padding;
-
-        // 设置最终画布的大小
-        finalCanvas.width = totalWidth + padding * 2;
-        finalCanvas.height = totalHeight + padding * 2;
-
-        // 填充白色背景
-        ctx.fillStyle = 'white';
-        ctx.fillRect(0, 0, finalCanvas.width, finalCanvas.height);
-
-        // 在网格中绘制所有截图
-        let index = 0;
-        for (let row = 0; row < rows; row++) {
-            for (let col = 0; col < cols; col++) {
-                if (index >= screenshots.length) break;
-                
-                const screenshot = screenshots[index];
-                const x = padding + col * (maxWidth + padding) + (maxWidth - screenshot.width) / 2;
-                const y = padding + row * (maxHeight + padding) + (maxHeight - screenshot.height) / 2;
-                
-                ctx.drawImage(screenshot.canvas, x, y);
-                index++;
-            }
-        }
-
-        // 将最终的canvas转换为blob并复制到剪贴板
-        finalCanvas.toBlob(async (blob) => {
-            try {
-                const item = new ClipboardItem({ "image/png": blob });
-                await navigator.clipboard.write([item]);
-
-                let toast = document.getElementById('screenshot-toast');
-                if (!toast) {
-                    toast = document.createElement('div');
-                    toast.id = 'screenshot-toast';
-                    document.body.appendChild(toast);
-                }
-                toast.textContent = '全局截图已复制到剪贴板';
-                toast.style.opacity = '1';
-                setTimeout(() => {
-                    toast.style.opacity = '0';
-                }, 3000);
-            } catch (err) {
-                console.error('复制到剪贴板失败:', err);
-                alert('复制到剪贴板失败，请检查浏览器权限设置');
-            }
-        }, 'image/png', 1.0);
-
-    } catch (error) {
-        console.error('截图失败:', error);
-        alert('截图过程中出现错误');
-    }
+    const screenshotManager = new ScreenshotManager();
+    await screenshotManager.captureAllViewers();
 }
 
 // 加载配置
@@ -1537,7 +1436,7 @@ function switchTab(groupId, tabName) {
     tabBtns.forEach(btn => btn.classList.remove('active'));
     tabContents.forEach(content => content.classList.remove('active'));
     
-    // 添加active类到选中的选项��
+    // 添加active类到选中的选项
     document.querySelector(`#group-${groupId} .tab-btn[data-tab="${tabName}"]`).classList.add('active');
     document.querySelector(`#group-${groupId} #${tabName}-tab-${groupId}`).classList.add('active');
 }

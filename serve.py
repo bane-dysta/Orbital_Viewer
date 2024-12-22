@@ -175,6 +175,7 @@ class OrbitalViewerHandler(http.server.SimpleHTTPRequestHandler):
     html_content = None
     css_content = None
     js_content = None
+    screenshot_js_content = None
     default_settings = None
     
     def __init__(self, *args, **kwargs):
@@ -230,6 +231,23 @@ class OrbitalViewerHandler(http.server.SimpleHTTPRequestHandler):
                 logging.error(f"加载JS文件失败: {e}")
                 OrbitalViewerHandler.js_content = b""
 
+        if OrbitalViewerHandler.screenshot_js_content is None:
+            try:
+                js_path = get_resource_path('screenshot.js')
+                logging.info(f"正在加载 Screenshot JS 文件: {js_path}")
+                if not os.path.exists(js_path):
+                    logging.error(f"Screenshot JS 文件不存在: {js_path}")
+                    alternative_path = os.path.join(os.path.dirname(__file__), 'screenshot.js')
+                    logging.info(f"尝试备选路径: {alternative_path}")
+                    if os.path.exists(alternative_path):
+                        js_path = alternative_path
+                
+                with open(js_path, 'rb') as f:
+                    OrbitalViewerHandler.screenshot_js_content = f.read()
+            except Exception as e:
+                logging.error(f"加载 Screenshot JS 文件失败: {e}")
+                OrbitalViewerHandler.screenshot_js_content = b""
+
         if OrbitalViewerHandler.default_settings is None:
             OrbitalViewerHandler.default_settings = load_default_settings()
             
@@ -268,6 +286,12 @@ class OrbitalViewerHandler(http.server.SimpleHTTPRequestHandler):
                         logging.error(f"加载文件失败 {file_name}: {e}")
                         self.send_error(404, f"File not found: {file_name}")
                         return
+                elif file_name == 'screenshot.js':
+                    self.send_response(200)
+                    self.send_header('Content-type', 'application/javascript')
+                    self.end_headers()
+                    self.wfile.write(OrbitalViewerHandler.screenshot_js_content)
+                    return
 
             # 处理CSS文件请求
             if path == '/styles.css':
