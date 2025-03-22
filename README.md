@@ -63,9 +63,12 @@ Orbital Viewer是一个主要由java与python写成的简易轨道查看器，�
 | Ctrl+C(命令行) | 返回主菜单 |
 
 ## 🔰下载地址
-打包好的可执行文件：[Orbital Viewer.exe](https://pub-ec46b9a843f44891acf04d27fddf97e0.r2.dev/2025/03/Orbital%20Viewer.exe)
 
-源码：[github](https://github.com/bane-dysta/Orb_Viewer)
+Release:
+[Orbital Viewer.exe](https://github.com/bane-dysta/Orbital_Viewer/releases/tag/v1.0.1)
+
+GitHub:
+[Orbital_Viewer](https://github.com/bane-dysta/Orbital_Viewer)
 
 ## 📋 更新日志
 
