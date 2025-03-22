@@ -5,6 +5,7 @@ import shutil
 import socket
 import http.server
 import socketserver
+import urllib.parse
 import webbrowser
 from pathlib import Path
 from urllib.parse import unquote
@@ -176,6 +177,10 @@ class OrbitalViewerHandler(http.server.SimpleHTTPRequestHandler):
     css_content = None
     js_content = None
     screenshot_js_content = None
+    notes_manager_js_content = None
+    utility_js_content = None
+    viewer_group_js_content = None
+    orbital_viewer_core_js_content = None
     default_settings = None
     
     def __init__(self, *args, **kwargs):
@@ -248,50 +253,181 @@ class OrbitalViewerHandler(http.server.SimpleHTTPRequestHandler):
                 logging.error(f"加载 Screenshot JS 文件失败: {e}")
                 OrbitalViewerHandler.screenshot_js_content = b""
 
+        # 加载新拆分的JS文件
+        if OrbitalViewerHandler.notes_manager_js_content is None:
+            try:
+                js_path = get_resource_path('static/notes-manager.js')
+                logging.info(f"正在加载 notes-manager.js 文件: {js_path}")
+                if os.path.exists(js_path):
+                    with open(js_path, 'rb') as f:
+                        OrbitalViewerHandler.notes_manager_js_content = f.read()
+                else:
+                    logging.error(f"Notes Manager JS 文件不存在: {js_path}")
+                    OrbitalViewerHandler.notes_manager_js_content = b""
+            except Exception as e:
+                logging.error(f"加载 Notes Manager JS 文件失败: {e}")
+                OrbitalViewerHandler.notes_manager_js_content = b""
+                
+        if OrbitalViewerHandler.utility_js_content is None:
+            try:
+                js_path = get_resource_path('static/utility.js')
+                logging.info(f"正在加载 utility.js 文件: {js_path}")
+                if os.path.exists(js_path):
+                    with open(js_path, 'rb') as f:
+                        OrbitalViewerHandler.utility_js_content = f.read()
+                else:
+                    logging.error(f"Utility JS 文件不存在: {js_path}")
+                    OrbitalViewerHandler.utility_js_content = b""
+            except Exception as e:
+                logging.error(f"加载 Utility JS 文件失败: {e}")
+                OrbitalViewerHandler.utility_js_content = b""
+                
+        if OrbitalViewerHandler.viewer_group_js_content is None:
+            try:
+                js_path = get_resource_path('static/viewer-group.js')
+                logging.info(f"正在加载 viewer-group.js 文件: {js_path}")
+                if os.path.exists(js_path):
+                    with open(js_path, 'rb') as f:
+                        OrbitalViewerHandler.viewer_group_js_content = f.read()
+                else:
+                    logging.error(f"Viewer Group JS 文件不存在: {js_path}")
+                    OrbitalViewerHandler.viewer_group_js_content = b""
+            except Exception as e:
+                logging.error(f"加载 Viewer Group JS 文件失败: {e}")
+                OrbitalViewerHandler.viewer_group_js_content = b""
+                
+        if OrbitalViewerHandler.orbital_viewer_core_js_content is None:
+            try:
+                js_path = get_resource_path('static/orbital-viewer-core.js')
+                logging.info(f"正在加载 orbital-viewer-core.js 文件: {js_path}")
+                if os.path.exists(js_path):
+                    with open(js_path, 'rb') as f:
+                        OrbitalViewerHandler.orbital_viewer_core_js_content = f.read()
+                else:
+                    logging.error(f"Orbital Viewer Core JS 文件不存在: {js_path}")
+                    OrbitalViewerHandler.orbital_viewer_core_js_content = b""
+            except Exception as e:
+                logging.error(f"加载 Orbital Viewer Core JS 文件失败: {e}")
+                OrbitalViewerHandler.orbital_viewer_core_js_content = b""
+
         if OrbitalViewerHandler.default_settings is None:
             OrbitalViewerHandler.default_settings = load_default_settings()
             
         super().__init__(*args, **kwargs)
 
+    def get_mime_type(self, filepath):
+        """根据文件扩展名确定MIME类型"""
+        ext = os.path.splitext(filepath)[1].lower()
+        
+        mime_types = {
+            '.html': 'text/html',
+            '.css': 'text/css',
+            '.js': 'application/javascript',
+            '.json': 'application/json',
+            '.png': 'image/png',
+            '.jpg': 'image/jpeg',
+            '.jpeg': 'image/jpeg',
+            '.gif': 'image/gif',
+            '.svg': 'image/svg+xml',
+            '.ico': 'image/x-icon',
+            '.woff': 'font/woff',
+            '.woff2': 'font/woff2',
+            '.ttf': 'font/ttf',
+            '.otf': 'font/otf',
+            '.eot': 'application/vnd.ms-fontobject'
+        }
+        
+        return mime_types.get(ext, 'application/octet-stream')
+
     def do_GET(self):
+        """处理GET请求"""
         try:
-            path = unquote(self.path)
+            # 解析 URL
+            parsed_url = urllib.parse.urlparse(self.path)
+            path = parsed_url.path
+            query = parsed_url.query
             
-            # 处理 static 目录下的文件请求
+            # 处理带有配置参数的请求
+            if path == '/' and query.startswith('config='):
+                config_name = unquote(query.split('=')[1])
+                logging.info(f"加载配置文件: {config_name}")
+                
+                try:
+                    with open(config_name, 'r', encoding='utf-8') as f:
+                        config_data = json.load(f)
+                except Exception as e:
+                    logging.error(f"读取配置文件失败: {e}")
+                    self.send_error(500, f"无法读取配置文件: {str(e)}")
+                    return
+
+                self.send_response(200)
+                self.send_header('Content-type', 'text/html')
+                self.end_headers()
+
+                # 改用更可靠的注入方式
+                # 1. 准备注入脚本
+                init_script = f"""
+                <script>
+                window.ORBITAL_VIEWER_CONFIG = {{
+                    configPath: '{config_name}',
+                    configData: {json.dumps(config_data)},
+                    defaultSettings: {json.dumps(OrbitalViewerHandler.default_settings)}
+                }};
+                </script>
+                """
+                
+                # 2. 准备 HTML 内容
+                html_lines = OrbitalViewerHandler.html_content.splitlines()
+                insert_index = -1
+                
+                # 3. 寻找 </head> 标签
+                for i, line in enumerate(html_lines):
+                    if '</head>' in line:
+                        insert_index = i
+                        break
+                
+                # 4. 如果找到插入点，在该位置前插入脚本
+                if insert_index >= 0:
+                    html_lines.insert(insert_index, init_script)
+                    modified_content = '\n'.join(html_lines)
+                else:
+                    # 5. 如果找不到 </head>，则尝试在 HTML 开头插入
+                    logging.warning("HTML中没有找到</head>标记，在开头插入配置")
+                    modified_content = f"{init_script}\n{OrbitalViewerHandler.html_content}"
+                
+                # 6. 写入修改后的内容
+                self.wfile.write(modified_content.encode('utf-8'))
+                return
+            elif path == '/':
+                filepath = get_resource_path('static/orbital_viewer.html')
+                self.send_response(200)
+                self.send_header('Content-type', 'text/html')
+                self.end_headers()
+                with open(filepath, 'rb') as file:
+                    self.wfile.write(file.read())
+                return
+                
+            # 处理 /static/ 开头的请求 - 提供静态文件
             if path.startswith('/static/'):
-                file_name = os.path.basename(path)  # 获取文件名
-                if file_name == 'styles.css':
-                    self.send_response(200)
-                    self.send_header('Content-type', 'text/css')
-                    self.end_headers()
-                    self.wfile.write(OrbitalViewerHandler.css_content)
+                # 获取文件名
+                filename = path[8:]  # 去掉 '/static/'
+                filepath = get_resource_path(f'static/{filename}')
+                
+                # 检查文件是否存在
+                if not os.path.exists(filepath):
+                    self.send_error(404, f"File not found: {filepath}")
                     return
-                elif file_name == 'orbital-viewer.js':
-                    self.send_response(200)
-                    self.send_header('Content-type', 'application/javascript')
-                    self.end_headers()
-                    self.wfile.write(OrbitalViewerHandler.js_content)
-                    return
-                elif file_name in ['3Dmol-min.js', 'jquery.min.js']:
-                    try:
-                        file_path = get_resource_path(file_name)
-                        with open(file_path, 'rb') as f:
-                            content = f.read()
-                            self.send_response(200)
-                            self.send_header('Content-type', 'application/javascript')
-                            self.end_headers()
-                            self.wfile.write(content)
-                            return
-                    except Exception as e:
-                        logging.error(f"加载文件失败 {file_name}: {e}")
-                        self.send_error(404, f"File not found: {file_name}")
-                        return
-                elif file_name == 'screenshot.js':
-                    self.send_response(200)
-                    self.send_header('Content-type', 'application/javascript')
-                    self.end_headers()
-                    self.wfile.write(OrbitalViewerHandler.screenshot_js_content)
-                    return
+                
+                # 根据文件扩展名决定 MIME 类型
+                mimetype = self.get_mime_type(filepath)
+                
+                # 发送文件
+                self.send_response(200)
+                self.send_header('Content-type', mimetype)
+                self.end_headers()
+                with open(filepath, 'rb') as file:
+                    self.wfile.write(file.read())
+                return
 
             # 处理CSS文件请求
             if path == '/styles.css':
@@ -309,37 +445,7 @@ class OrbitalViewerHandler(http.server.SimpleHTTPRequestHandler):
                 return
 
             # 处理主页请求
-            if path.startswith('/?config='):
-                config_name = unquote(path.split('=')[1])
-                logging.info(f"加载配置文件: {config_name}")
-                
-                try:
-                    with open(config_name, 'r', encoding='utf-8') as f:
-                        config_data = json.load(f)
-                except Exception as e:
-                    logging.error(f"读取配置文件失败: {e}")
-                    self.send_error(500, f"无法读取配置文件: {str(e)}")
-                    return
-
-                self.send_response(200)
-                self.send_header('Content-type', 'text/html')
-                self.end_headers()
-
-                # 注入配置信息和默认设置
-                init_script = f"""
-                <script>
-                    window.ORBITAL_VIEWER_CONFIG = {{
-                        configPath: '{config_name}',
-                        configData: {json.dumps(config_data)},
-                        defaultSettings: {json.dumps(OrbitalViewerHandler.default_settings)}
-                    }};
-                </script>
-                """
-                modified_content = OrbitalViewerHandler.html_content.replace('</head>', f'{init_script}</head>')
-                self.wfile.write(modified_content.encode('utf-8'))
-                return
-
-            elif path == '/' or path == '/index.html':
+            if path == '/index.html':
                 self.send_response(200)
                 self.send_header('Content-type', 'text/html')
                 self.end_headers()
@@ -356,11 +462,33 @@ class OrbitalViewerHandler(http.server.SimpleHTTPRequestHandler):
                 self.wfile.write(modified_content.encode('utf-8'))
                 return
 
-            elif path == '/' or path == '/index.html':
+            # 添加新JavaScript文件的处理
+            if path == '/static/notes-manager.js':
                 self.send_response(200)
-                self.send_header('Content-type', 'text/html')
+                self.send_header('Content-type', 'application/javascript')
                 self.end_headers()
-                self.wfile.write(OrbitalViewerHandler.html_content.encode('utf-8'))
+                self.wfile.write(OrbitalViewerHandler.notes_manager_js_content)
+                return
+                
+            if path == '/static/utility.js':
+                self.send_response(200)
+                self.send_header('Content-type', 'application/javascript')
+                self.end_headers()
+                self.wfile.write(OrbitalViewerHandler.utility_js_content)
+                return
+                
+            if path == '/static/viewer-group.js':
+                self.send_response(200)
+                self.send_header('Content-type', 'application/javascript')
+                self.end_headers()
+                self.wfile.write(OrbitalViewerHandler.viewer_group_js_content)
+                return
+                
+            if path == '/static/orbital-viewer-core.js':
+                self.send_response(200)
+                self.send_header('Content-type', 'application/javascript')
+                self.end_headers()
+                self.wfile.write(OrbitalViewerHandler.orbital_viewer_core_js_content)
                 return
 
             # 处理其他文件请求
