@@ -1,4 +1,3 @@
-// 类定义 - ViewerGroup
 class ViewerGroup {
     constructor(id) {
         this.id = id;
@@ -11,7 +10,6 @@ class ViewerGroup {
             color1: '#0000FF',
             color2: '#FF0000',
             isoValue: '0.002',
-            surfaceScale: '1.0',
             showPositive: true
         };
 
@@ -86,21 +84,6 @@ class ViewerGroup {
         this.updateSurfaces();
         // 更新按钮文本
         $(`#toggleCub2-${this.id}`).text(this.showCub2 ? '隐藏 CUB2' : '显示 CUB2');
-    }
-
-    // 添加切换选项卡的函数
-    switchTab(tabName) {
-        // 获取所有选项卡按钮和内容
-        const tabBtns = document.querySelectorAll(`#group-${this.id} .tab-btn`);
-        const tabContents = document.querySelectorAll(`#group-${this.id} .tab-content`);
-        
-        // 移除所有active类
-        tabBtns.forEach(btn => btn.classList.remove('active'));
-        tabContents.forEach(content => content.classList.remove('active'));
-        
-        // 添加active类到选中的选项卡
-        document.querySelector(`#group-${this.id} .tab-btn[onclick*="${tabName}"]`).classList.add('active');
-        document.querySelector(`#group-${this.id} #${tabName}-tab-${this.id}`).classList.add('active');
     }
 
     // 添加切换染色模式的方法
@@ -183,8 +166,6 @@ class ViewerGroup {
         $(`#color1-${this.id}`).val(config.color1);
         $(`#color2-${this.id}`).val(config.color2);
         $(`#isoValue-${this.id}`).val(config.isoValue);
-        $(`#surfaceScale-${this.id}`).val(config.surfaceScale);
-        $(`#scaleDisplay-${this.id}`).text(config.surfaceScale);
 
         // 更新文件名显示
         $(`#file1-label-${this.id}`).text(`文件 1: ${this.fileName1}`);
@@ -230,7 +211,6 @@ class ViewerGroup {
             color1: this.color1,
             color2: this.color2,
             isoValue: $(`#isoValue-${this.id}`).val(),
-            surfaceScale: $(`#surfaceScale-${this.id}`).val(),
             showPositive: this.showPositive,
             fileName1: this.fileName1,
             fileName2: this.fileName2,
@@ -855,224 +835,96 @@ class ViewerGroup {
     }
 
     close() {
-
-        try {
-
-            console.log('开始删除轨道组:', this.id, this.title);
-
-            
-
-            // 1. 从 DOM 中移除
-
-            const element = document.getElementById(`group-${this.id}`);
-
-            if (!element) {
-
-                console.error('找不到要删除的元素:', this.id);
-
-                return;
-
-            }
-
-            element.remove();
-
-            
-
-            // 2. 从数组中移除
-
-            const index = viewerGroups.indexOf(this);
-
-            if (index === -1) {
-
-                console.error('在 viewerGroups 中找不到要删除的组:', this.id);
-
-                return;
-
-            }
-
+        // 查找此查看器在数组中的索引
+        const index = viewerGroups.findIndex(group => group.id === this.id);
+        if (index !== -1) {
+            // 从数组中移除此查看器
             viewerGroups.splice(index, 1);
-
             
-
-            // 3. 重新分配所有 id
-
-            this.reassignIds();
-
-            
-
-            console.log('删除完成，当前轨道组数量:', viewerGroups.length);
-
-        } catch (error) {
-
-            console.error('删除轨道组时出错:', error);
-
+            // 从DOM中移除此查看器的HTML元素
+            const element = document.getElementById(`group-${this.id}`);
+            if (element) {
+                element.remove();
+            }
+            // 重新分配其他查看器的ID
+            reassignIds();
         }
-
     }
-    // 重新分配 ID 函数
-    reassignIds() {
+
+    static reassignIds() {
         // 重新分配数组中所有元素的ID
         viewerGroups.forEach((group, index) => {
-
             group.id = index;
             // 找到对应的 DOM 元素并更新 ID
-
             const element = document.getElementById(`group-${group.id}`);
-
             if (element) {
-
                 // 更新查看器 ID
-
                 const viewer = element.querySelector('.viewer');
-
                 if (viewer) {
-
                     viewer.id = `viewer-${index}`;
-
                 }
-
-                
-
                 // 更新标题输入框
-
                 const titleInput = element.querySelector('.title-input');
-
                 if (titleInput) {
-
                     titleInput.id = `title-${index}`;
-
                 }
-
-                
-
                 // 更新关闭按钮的 onclick 事件
-
                 const closeBtn = element.querySelector('.close-btn');
-
                 if (closeBtn) {
-
                     closeBtn.setAttribute('onclick', `viewerGroups[${index}].close()`);
-
                 }
-
-                
-
                 // 更新颜色选择器
-
                 const color1Input = element.querySelector(`input[id^="color1-"]`);
-
                 if (color1Input) {
-
                     color1Input.id = `color1-${index}`;
-
                 }
-
-                
-
                 const color2Input = element.querySelector(`input[id^="color2-"]`);
-
                 if (color2Input) {
-
                     color2Input.id = `color2-${index}`;
-
                 }
-
-                
-
                 // 更新等值面输入框
-
                 const isoValueInput = element.querySelector(`input[id^="isoValue-"]`);
-
                 if (isoValueInput) {
-
                     isoValueInput.id = `isoValue-${index}`;
-
                 }
-
-                
-
                 // 更新 CUB 切换按钮
-
                 const toggleCub1Btn = element.querySelector(`button[id^="toggleCub1-"]`);
-
                 if (toggleCub1Btn) {
-
                     toggleCub1Btn.id = `toggleCub1-${index}`;
-
                     toggleCub1Btn.setAttribute('onclick', `viewerGroups[${index}].toggleCub1()`);
-
                 }
-
-                
-
                 const toggleCub2Btn = element.querySelector(`button[id^="toggleCub2-"]`);
-
                 if (toggleCub2Btn) {
-
                     toggleCub2Btn.id = `toggleCub2-${index}`;
-
                     toggleCub2Btn.setAttribute('onclick', `viewerGroups[${index}].toggleCub2()`);
-
                 }
-
             }
-
         });
-
     }
-
-    
-
-    // 添加状态日志方法
 
     logState() {
-
         console.log('当前状态:');
-
         console.log('ViewerGroups 数组:', viewerGroups.map(g => ({id: g.id, title: g.title})));
-
         
-
         const domGroups = document.querySelectorAll('.viewer-group');
-
         console.log('DOM 元素:');
-
         domGroups.forEach(element => {
-
             const id = element.id.replace('group-', '');
-
             const titleInput = element.querySelector('.title-input');
-
             const title = titleInput ? titleInput.value : '未知';
-
             console.log(`- DOM ID: ${id}, 标题: ${title}`);
-
         });
-
     }
-
-
 
     updateColorMapping() {
-
         if (!this.isColorMappingEnabled) return;
-
         
-
         const minValue = parseFloat(document.getElementById(`minMapValue-${this.id}`).value);
-
         const maxValue = parseFloat(document.getElementById(`maxMapValue-${this.id}`).value);
-
         const negativeColor = document.getElementById(`negativeColor-${this.id}`).value;
-
         const positiveColor = document.getElementById(`positiveColor-${this.id}`).value;
 
-
-
         // 更新表面显示
-
         this.updateSurfaces();
-
     }
-
 }
