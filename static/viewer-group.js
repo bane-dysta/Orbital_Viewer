@@ -1,3 +1,4 @@
+// 类定义 - ViewerGroup
 class ViewerGroup {
     constructor(id) {
         this.id = id;
@@ -472,9 +473,6 @@ class ViewerGroup {
     updateSurfaces() {
         if (!this.viewer) return;
 
-        // 清除当前表面
-        this.viewer.removeAllSurfaces();
-        
         this.viewer.clear();
         this.displayMolecule();
 
@@ -721,24 +719,6 @@ class ViewerGroup {
     toggleNegative() {
         this.showNegative = !this.showNegative;
         this.updateSurfaces();
-        
-        // 更新按钮文本
-        const button = document.getElementById(`toggleNegative-${this.id}`);
-        if (button) {
-            button.textContent = this.showNegative ? '隐藏负值表面' : '显示负值表面';
-        }
-    }
-
-    // 切换显示/隐藏正值表面
-    togglePositive() {
-        this.showPositive = !this.showPositive;
-        this.updateSurfaces();
-        
-        // 更新按钮文本
-        const button = document.getElementById(`togglePositive-${this.id}`);
-        if (button) {
-            button.textContent = this.showPositive ? '隐藏正值表面' : '显示正值表面';
-        }
     }
 
     // 创建HTML结构
