@@ -219,23 +219,6 @@ class OrbitalViewerHandler(http.server.SimpleHTTPRequestHandler):
                 logging.error(f"加载CSS文件失败: {e}")
                 OrbitalViewerHandler.css_content = b""
 
-        if OrbitalViewerHandler.js_content is None:
-            try:
-                js_path = get_resource_path('orbital-viewer.js')
-                logging.info(f"正在加载JS文件: {js_path}")
-                if not os.path.exists(js_path):
-                    logging.error(f"JS文件不存在: {js_path}")
-                    alternative_path = os.path.join(os.path.dirname(__file__), 'orbital-viewer.js')
-                    logging.info(f"尝试备选路径: {alternative_path}")
-                    if os.path.exists(alternative_path):
-                        js_path = alternative_path
-                
-                with open(js_path, 'rb') as f:
-                    OrbitalViewerHandler.js_content = f.read()
-            except Exception as e:
-                logging.error(f"加载JS文件失败: {e}")
-                OrbitalViewerHandler.js_content = b""
-
         if OrbitalViewerHandler.screenshot_js_content is None:
             try:
                 js_path = get_resource_path('screenshot.js')
@@ -347,10 +330,19 @@ class OrbitalViewerHandler(http.server.SimpleHTTPRequestHandler):
             path = parsed_url.path
             query = parsed_url.query
             
+            # 处理根路径请求
             # 处理带有配置参数的请求
             if path == '/' and query.startswith('config='):
                 config_name = unquote(query.split('=')[1])
                 logging.info(f"加载配置文件: {config_name}")
+                
+                # 修复 WSL 环境下的路径问题
+                if sys.platform == 'linux' and 'microsoft' in os.uname().release.lower():
+                    logging.info("检测到 WSL 环境，使用特殊路径处理")
+                    # 确保使用绝对路径
+                    if not os.path.isabs(config_name):
+                        config_name = os.path.abspath(config_name)
+                    logging.info(f"WSL 环境下调整后的配置路径: {config_name}")
                 
                 try:
                     with open(config_name, 'r', encoding='utf-8') as f:
@@ -364,36 +356,61 @@ class OrbitalViewerHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_header('Content-type', 'text/html')
                 self.end_headers()
 
-                # 改用更可靠的注入方式
-                # 1. 准备注入脚本
-                init_script = f"""
-                <script>
-                window.ORBITAL_VIEWER_CONFIG = {{
-                    configPath: '{config_name}',
-                    configData: {json.dumps(config_data)},
-                    defaultSettings: {json.dumps(OrbitalViewerHandler.default_settings)}
-                }};
-                </script>
-                """
+                # 更安全的方法：分步构建脚本字符串
+                # 1. 预处理路径
+                normalized_path = config_name
+                if '\\' in normalized_path:
+                    normalized_path = normalized_path.replace('\\', '/')
                 
-                # 2. 准备 HTML 内容
+                # 添加调试输出
+                logging.info(f"正在处理配置路径: {normalized_path}")
+                
+                # 2. 预处理JSON数据
+                config_json = json.dumps(config_data)
+                settings_json = json.dumps(OrbitalViewerHandler.default_settings)
+                
+                # 调试: 验证JSON数据
+                logging.info(f"配置数据预览: {config_json[:100]}...")
+                
+                # 3. 构建脚本字符串
+                init_script = '<script>\n'
+                init_script += 'window.ORBITAL_VIEWER_CONFIG = {\n'
+                init_script += f'  configPath: "{normalized_path}",\n'
+                init_script += f'  configData: {config_json},\n'
+                init_script += f'  defaultSettings: {settings_json}\n'
+                init_script += '};\n'
+                init_script += 'console.log("配置数据已注入:", window.ORBITAL_VIEWER_CONFIG);\n'
+                init_script += '</script>\n'
+                
+                # 调试: 输出脚本内容
+                logging.info(f"生成的配置脚本: \n{init_script}")
+                
+                # 4. 准备 HTML 内容
                 html_lines = OrbitalViewerHandler.html_content.splitlines()
                 insert_index = -1
+                
+                # 调试: 验证HTML内容
+                logging.info(f"HTML行数: {len(html_lines)}")
                 
                 # 3. 寻找 </head> 标签
                 for i, line in enumerate(html_lines):
                     if '</head>' in line:
                         insert_index = i
+                        logging.info(f"找到</head>标签，位置: {i}")
                         break
                 
                 # 4. 如果找到插入点，在该位置前插入脚本
                 if insert_index >= 0:
                     html_lines.insert(insert_index, init_script)
                     modified_content = '\n'.join(html_lines)
+                    logging.info("配置脚本已注入到</head>标签前")
                 else:
                     # 5. 如果找不到 </head>，则尝试在 HTML 开头插入
                     logging.warning("HTML中没有找到</head>标记，在开头插入配置")
                     modified_content = f"{init_script}\n{OrbitalViewerHandler.html_content}"
+                
+                # 调试: 确认生成的内容
+                logging.info(f"生成的HTML内容长度: {len(modified_content)}")
                 
                 # 6. 写入修改后的内容
                 self.wfile.write(modified_content.encode('utf-8'))
@@ -435,13 +452,6 @@ class OrbitalViewerHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_header('Content-type', 'text/css')
                 self.end_headers()
                 self.wfile.write(OrbitalViewerHandler.css_content)
-                return
-
-            if path == '/orbital-viewer.js' or path == '/static/orbital-viewer.js':
-                self.send_response(200)
-                self.send_header('Content-type', 'application/javascript')
-                self.end_headers()
-                self.wfile.write(OrbitalViewerHandler.js_content)
                 return
 
             # 处理主页请求
@@ -536,10 +546,19 @@ def start_viewer_server(config_path=None):
 
         # 如果提供了配置文件，切换到配置文件所在目录
         if config_path:
+            # 检测 WSL 环境并进行特殊处理
+            is_wsl = False
+            if sys.platform == 'linux' and 'microsoft' in os.uname().release.lower():
+                logging.info("检测到 WSL 环境，使用特殊路径处理")
+                config_path = os.path.abspath(config_path)
+                is_wsl = True
+
             json_dir = os.path.dirname(os.path.abspath(config_path))
             os.chdir(json_dir)
             json_name = os.path.basename(config_path)
             logging.info(f"工作目录已切换到: {json_dir}")
+            logging.info(f"配置文件: {json_name}")
+            logging.info(f"完整路径: {config_path}")
         else:
             os.chdir(os.getcwd())
             logging.info(f"无配置模式启动，工作目录: {os.getcwd()}")
@@ -553,11 +572,32 @@ def start_viewer_server(config_path=None):
             # 构建URL
             if config_path:
                 url = f'http://localhost:{port}/?config={json_name}'
+                # 打印调试信息
+                logging.info(f"构建的完整URL: {url}")
             else:
                 url = f'http://localhost:{port}/'
             
+            # 确保URL在传递给浏览器时正确编码
+            import urllib.parse
+            encoded_url = urllib.parse.quote(url, safe=':/?=')
+            logging.info(f"编码后的URL: {encoded_url}")
+            
             logging.info(f"正在浏览器中打开本地地址...")
-            webbrowser.open(url)
+            
+            # WSL环境下的特殊处理
+            if is_wsl:
+                # WSL环境可能需要使用外部命令打开浏览器
+                try:
+                    import subprocess
+                    cmd = f'powershell.exe -Command "Start-Process \'{encoded_url}\'"'
+                    logging.info(f"WSL环境使用命令打开浏览器: {cmd}")
+                    subprocess.Popen(cmd, shell=True)
+                except Exception as e:
+                    logging.error(f"WSL浏览器启动失败: {e}")
+                    logging.info(f"请手动访问: {url}")
+            else:
+                # 正常环境下使用webbrowser模块
+                webbrowser.open(url)
             
             # 运行服务器
             httpd.serve_forever()

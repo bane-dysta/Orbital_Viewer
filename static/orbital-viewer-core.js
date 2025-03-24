@@ -95,7 +95,16 @@ document.getElementById('global-title').addEventListener('input', function () {
 // 添加 DOMContentLoaded 事件监听器
 document.addEventListener('DOMContentLoaded', function () {
     console.log('DOMContentLoaded 事件触发');
+    console.log('文档就绪状态:', document.readyState);
     console.log('ORBITAL_VIEWER_CONFIG 状态:', window.ORBITAL_VIEWER_CONFIG);
+    
+    // 检查全局对象的所有属性
+    console.log('window 对象可用属性:');
+    for (let prop in window) {
+        if (prop.includes('ORBITAL') || prop.includes('VIEWER') || prop.includes('CONFIG')) {
+            console.log(`- ${prop}:`, window[prop]);
+        }
+    }
     
     // 检查是否有配置数据
     if (window.ORBITAL_VIEWER_CONFIG && window.ORBITAL_VIEWER_CONFIG.configData) {
