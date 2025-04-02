@@ -1,5 +1,20 @@
 // 存储所有查看器的数据
 const viewerGroups = [];
+// 添加同步视角功能
+function syncAllViews() {
+    if (viewerGroups.length <= 1) return;
+    
+    // 使用第一个查看器的视角作为参考
+    const state = viewerGroups[0].getViewState();
+    console.log('同步视角状态:', state);
+    
+    // 将视角同步到其他所有查看器
+    viewerGroups.forEach((group, index) => {
+        if (index > 0) {
+            group.setViewState(state, viewerGroups[0].id);
+        }
+    });
+}
 
 // 添加新的查看器组
 function addNewViewerGroup() {

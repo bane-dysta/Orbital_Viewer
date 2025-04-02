@@ -650,3 +650,13 @@ input:checked + .slider:before {
         min-height: 80px;
     }
 }
+
+/* 同步按钮样式 */
+.sync-views-btn {
+    background: #4CAF50;
+    margin-left: 10px;
+}
+
+.sync-views-btn:hover {
+    background: #388E3C;
+}

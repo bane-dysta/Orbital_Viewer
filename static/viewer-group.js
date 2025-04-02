@@ -4,6 +4,7 @@ class ViewerGroup {
         this.viewer = null;
         this.currentData1 = null;
         this.currentData2 = null;
+        this.isUpdatingView = false;  // 防止无限循环的标志
 
         // 从全局配置获取默认设置
         const defaultSettings = (window.ORBITAL_VIEWER_CONFIG && window.ORBITAL_VIEWER_CONFIG.defaultSettings) || {
@@ -34,6 +35,27 @@ class ViewerGroup {
         
         // 初始化备注管理器
         this.notesManager = new NotesManager(this.id);
+    }
+
+    // 获取当前视角状态
+    getViewState() {
+        if (!this.viewer) return null;
+        // 使用正确的 3Dmol API
+        return this.viewer.getView();
+    }
+
+    // 设置视角状态
+    setViewState(state, sourceId) {
+        if (!this.viewer || this.isUpdatingView || this.id === sourceId) return;
+        
+        this.isUpdatingView = true;
+        try {
+            // 使用正确的 3Dmol API
+            this.viewer.setView(state);
+            this.viewer.render();
+        } finally {
+            this.isUpdatingView = false;
+        }
     }
 
     async initialize() {
