@@ -4,6 +4,7 @@ import sys
 import time
 from serve import start_viewer_server
 import logging
+import argparse
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
 
@@ -85,7 +86,53 @@ def process_config_path(path):
     
     return True
 
+def parse_command_line():
+    """解析命令行参数，支持与quick_start相同的功能"""
+    parser = argparse.ArgumentParser(description='轨道查看器')
+    parser.add_argument('-c', '--config', 
+                       help='指定要加载的JSON配置文件路径')
+    parser.add_argument('-s', '--silent', action='store_true',
+                       help='静默模式，不显示欢迎信息')
+    
+    return parser.parse_args()
+
 def main():
+    # 解析命令行参数
+    args = parse_command_line()
+    
+    # 如果提供了命令行参数，以无交互模式运行
+    if args.config or args.silent:
+        if not args.silent:
+            print_header()
+        
+        try:
+            if args.config:
+                # 检查文件是否存在且是JSON格式
+                if not os.path.exists(args.config):
+                    logging.error(f"配置文件不存在: {args.config}")
+                    return 1
+                    
+                if not args.config.endswith('.json'):
+                    logging.error(f"配置文件必须是JSON格式: {args.config}")
+                    return 1
+                    
+                logging.info(f"正在加载配置文件: {args.config}")
+                start_viewer_server(args.config)
+                return 0
+            else:
+                # 无配置文件模式启动
+                logging.info("以默认模式启动轨道查看器...")
+                start_viewer_server()
+                return 0
+                
+        except KeyboardInterrupt:
+            logging.info("程序被中断，正在退出...")
+            return 1
+        except Exception as e:
+            logging.error(f"启动过程中发生错误: {str(e)}")
+            return 1
+    
+    # 如果没有命令行参数，以交互模式运行
     while True:
         try:
             clear_screen()
