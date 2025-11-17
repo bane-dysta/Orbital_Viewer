@@ -87,4 +87,10 @@ class NotesManager {
             this.setNotes(notesContent);
         }
     }
+
+    updateGroupId(newGroupId) {
+        if (this.groupId === newGroupId) return;
+        this.groupId = newGroupId;
+        this.setupEventListeners();
+    }
 } 

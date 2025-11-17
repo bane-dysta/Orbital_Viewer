@@ -859,68 +859,91 @@ class ViewerGroup {
     close() {
         // 查找此查看器在数组中的索引
         const index = viewerGroups.findIndex(group => group.id === this.id);
-        if (index !== -1) {
-            // 从数组中移除此查看器
-            viewerGroups.splice(index, 1);
-            
-            // 从DOM中移除此查看器的HTML元素
-            const element = document.getElementById(`group-${this.id}`);
-            if (element) {
-                element.remove();
-            }
-            // 重新分配其他查看器的ID
-            reassignIds();
+        if (index === -1) return;
+
+        // 从数组中移除此查看器
+        viewerGroups.splice(index, 1);
+        
+        // 从DOM中移除此查看器的HTML元素
+        const element = document.getElementById(`group-${this.id}`);
+        if (element) {
+            element.remove();
         }
+
+        // 重新分配其他查看器的ID
+        ViewerGroup.reassignIds();
     }
 
     static reassignIds() {
-        // 重新分配数组中所有元素的ID
         viewerGroups.forEach((group, index) => {
+            if (group.id === index) return;
+
+            const oldId = group.id;
+            const container = document.getElementById(`group-${oldId}`);
             group.id = index;
-            // 找到对应的 DOM 元素并更新 ID
-            const element = document.getElementById(`group-${group.id}`);
-            if (element) {
-                // 更新查看器 ID
-                const viewer = element.querySelector('.viewer');
-                if (viewer) {
-                    viewer.id = `viewer-${index}`;
-                }
-                // 更新标题输入框
-                const titleInput = element.querySelector('.title-input');
-                if (titleInput) {
-                    titleInput.id = `title-${index}`;
-                }
-                // 更新关闭按钮的 onclick 事件
-                const closeBtn = element.querySelector('.close-btn');
-                if (closeBtn) {
-                    closeBtn.setAttribute('onclick', `viewerGroups[${index}].close()`);
-                }
-                // 更新颜色选择器
-                const color1Input = element.querySelector(`input[id^="color1-"]`);
-                if (color1Input) {
-                    color1Input.id = `color1-${index}`;
-                }
-                const color2Input = element.querySelector(`input[id^="color2-"]`);
-                if (color2Input) {
-                    color2Input.id = `color2-${index}`;
-                }
-                // 更新等值面输入框
-                const isoValueInput = element.querySelector(`input[id^="isoValue-"]`);
-                if (isoValueInput) {
-                    isoValueInput.id = `isoValue-${index}`;
-                }
-                // 更新 CUB 切换按钮
-                const toggleCub1Btn = element.querySelector(`button[id^="toggleCub1-"]`);
-                if (toggleCub1Btn) {
-                    toggleCub1Btn.id = `toggleCub1-${index}`;
-                    toggleCub1Btn.setAttribute('onclick', `viewerGroups[${index}].toggleCub1()`);
-                }
-                const toggleCub2Btn = element.querySelector(`button[id^="toggleCub2-"]`);
-                if (toggleCub2Btn) {
-                    toggleCub2Btn.id = `toggleCub2-${index}`;
-                    toggleCub2Btn.setAttribute('onclick', `viewerGroups[${index}].toggleCub2()`);
-                }
+
+            if (group.notesManager && typeof group.notesManager.updateGroupId === 'function') {
+                group.notesManager.updateGroupId(index);
             }
+
+            if (!container) return;
+
+            // 更新容器 ID
+            container.id = `group-${index}`;
+
+            // 更新所有依赖 ID 的元素
+            const idMappings = [
+                { selector: `#viewer-${oldId}`, newId: `viewer-${index}` },
+                { selector: `#title-${oldId}`, newId: `title-${index}` },
+                { selector: `#file1-label-${oldId}`, newId: `file1-label-${index}` },
+                { selector: `#file2-label-${oldId}`, newId: `file2-label-${index}` },
+                { selector: `#color1-${oldId}`, newId: `color1-${index}` },
+                { selector: `#color2-${oldId}`, newId: `color2-${index}` },
+                { selector: `#isoValue-${oldId}`, newId: `isoValue-${index}` },
+                { selector: `#toggleCub1-${oldId}`, newId: `toggleCub1-${index}` },
+                { selector: `#toggleCub2-${oldId}`, newId: `toggleCub2-${index}` },
+                { selector: `#toggleColorMap-${oldId}`, newId: `toggleColorMap-${index}` },
+                { selector: `#minMapValue-${oldId}`, newId: `minMapValue-${index}` },
+                { selector: `#maxMapValue-${oldId}`, newId: `maxMapValue-${index}` },
+                { selector: `#negativeColor-${oldId}`, newId: `negativeColor-${index}` },
+                { selector: `#positiveColor-${oldId}`, newId: `positiveColor-${index}` },
+                { selector: `#notes-${oldId}`, newId: `notes-${index}` },
+                { selector: `#basic-tab-${oldId}`, newId: `basic-tab-${index}` },
+                { selector: `#mapping-tab-${oldId}`, newId: `mapping-tab-${index}` },
+                { selector: `#notes-tab-${oldId}`, newId: `notes-tab-${index}` }
+            ];
+
+            idMappings.forEach(({ selector, newId }) => {
+                const target = container.querySelector(selector);
+                if (target) {
+                    target.id = newId;
+                }
+            });
+
+            // 更新按钮的 onclick 处理
+            const buttonHandlers = [
+                { selector: '.close-btn', handler: `viewerGroups[${index}].close()` },
+                { selector: '.screenshot-btn', handler: `viewerGroups[${index}].takeScreenshot()` },
+                { selector: `#toggleCub1-${index}`, handler: `viewerGroups[${index}].toggleCub1()` },
+                { selector: `#toggleCub2-${index}`, handler: `viewerGroups[${index}].toggleCub2()` },
+                { selector: `#toggleColorMap-${index}`, handler: `viewerGroups[${index}].toggleColorMapping()` }
+            ];
+
+            buttonHandlers.forEach(({ selector, handler }) => {
+                const btn = container.querySelector(selector);
+                if (btn) {
+                    btn.setAttribute('onclick', handler);
+                }
+            });
+
+            // 更新选项卡按钮的 onclick
+            const tabButtons = container.querySelectorAll('.tab-btn');
+            tabButtons.forEach((btn) => {
+                const tabName = btn.getAttribute('data-tab');
+                if (tabName) {
+                    btn.setAttribute('onclick', `switchTab(${index}, '${tabName}')`);
+                }
+            });
         });
     }
 

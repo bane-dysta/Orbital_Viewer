@@ -545,9 +545,9 @@ def start_viewer_server(config_path=None):
         logging.info(f"本机IP地址: {local_ip}")
 
         # 如果提供了配置文件，切换到配置文件所在目录
+        is_wsl = False
         if config_path:
             # 检测 WSL 环境并进行特殊处理
-            is_wsl = False
             if sys.platform == 'linux' and 'microsoft' in os.uname().release.lower():
                 logging.info("检测到 WSL 环境，使用特殊路径处理")
                 config_path = os.path.abspath(config_path)

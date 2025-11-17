@@ -65,7 +65,6 @@ def create_viewer_config(files: List[str], group_id: int = 0) -> Dict:
         "color1": "#0000FF",  # 第一个文件用蓝色
         "color2": "#FF0000",  # 第二个文件用红色
         "isoValue": "0.002",
-        "surfaceScale": "2.0",
         "showPositive": True,
         "fileName1": files[0],
         "fileName2": files[1] if len(files) > 1 else ""
