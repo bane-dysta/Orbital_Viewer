@@ -58,6 +58,63 @@ class ViewerGroup {
         }
     }
 
+    // 导出当前视角参数为 JSON
+    exportViewState() {
+        const state = this.getViewState();
+        if (!state) {
+            this.showError('当前视角不可用');
+            return;
+        }
+
+        try {
+            const json = JSON.stringify(state, null, 2);
+            const blob = new Blob([json], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+            a.href = url;
+            a.download = `viewer-${this.id}-view-${timestamp}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            this.showToast('视角参数已导出');
+        } catch (error) {
+            console.error('导出视角失败:', error);
+            this.showError('导出视角失败');
+        }
+    }
+
+    // 触发读取视角文件
+    triggerViewStateImport() {
+        const input = document.getElementById(`viewStateInput-${this.id}`);
+        if (input) {
+            input.value = '';
+            input.click();
+        }
+    }
+
+    // 处理视角文件导入
+    async handleViewStateFile(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        try {
+            const text = await file.text();
+            const state = JSON.parse(text);
+            if (!state || typeof state !== 'object') {
+                throw new Error('视角数据格式错误');
+            }
+            this.setViewState(state);
+            this.showToast('视角参数已加载');
+        } catch (error) {
+            console.error('加载视角失败:', error);
+            this.showError('加载视角失败，请检查文件格式');
+        } finally {
+            event.target.value = '';
+        }
+    }
+
     async initialize() {
         if (this.isInitialized) return;
 
@@ -763,6 +820,21 @@ class ViewerGroup {
                             <button class="btn screenshot-btn" onclick="viewerGroups[${this.id}].takeScreenshot()">
                                 截图
                             </button>
+                        </div>
+                        <div class="control-group">
+                            <div class="button-row">
+                                <button class="btn" onclick="viewerGroups[${this.id}].exportViewState()">
+                                    导出视角
+                                </button>
+                                <button class="btn" onclick="viewerGroups[${this.id}].triggerViewStateImport()">
+                                    加载视角
+                                </button>
+                            </div>
+                            <input type="file" 
+                                id="viewStateInput-${this.id}" 
+                                accept="application/json" 
+                                style="display:none" 
+                                onchange="viewerGroups[${this.id}].handleViewStateFile(event)">
                         </div>
                     </div>
                     <div class="viewer" id="viewer-${this.id}"></div>
