@@ -58,6 +58,45 @@ class ViewerGroup {
         }
     }
 
+    // 复制当前视角参数到剪贴板（转换为VMD格式）
+    async copyViewState() {
+        const state = this.getViewState();
+        if (!state) {
+            this.showError('当前视角不可用');
+            return;
+        }
+
+        try {
+            // 显示处理中提示
+            this.showToast('正在转换视角格式...');
+            
+            // 调用服务器端API进行转换
+            const response = await fetch('/convert-view', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(state)
+            });
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`转换失败: ${errorText}`);
+            }
+            
+            const result = await response.json();
+            const vmd_string = result.vmd_string;
+            
+            // 复制到剪贴板
+            await navigator.clipboard.writeText(vmd_string);
+            this.showToast('VMD视角已复制到剪贴板');
+            
+        } catch (error) {
+            console.error('复制视角失败:', error);
+            this.showError('复制视角失败: ' + error.message);
+        }
+    }
+
     // 导出当前视角参数为 JSON
     exportViewState() {
         const state = this.getViewState();
@@ -250,6 +289,43 @@ class ViewerGroup {
         $(`#file1-label-${this.id}`).text(`文件 1: ${this.fileName1}`);
         $(`#file2-label-${this.id}`).text(`文件 2: ${this.fileName2 || ''}`);
 
+        // 加载值映射配置
+        if (config.isColorMappingEnabled !== undefined) {
+            this.isColorMappingEnabled = config.isColorMappingEnabled;
+            
+            // 更新值映射相关的UI元素
+            const minMapValueEl = document.getElementById(`minMapValue-${this.id}`);
+            const maxMapValueEl = document.getElementById(`maxMapValue-${this.id}`);
+            const negativeColorEl = document.getElementById(`negativeColor-${this.id}`);
+            const positiveColorEl = document.getElementById(`positiveColor-${this.id}`);
+            const color1Input = document.getElementById(`color1-${this.id}`);
+            const color2Input = document.getElementById(`color2-${this.id}`);
+            const toggleBtn = document.getElementById(`toggleColorMap-${this.id}`);
+            
+            if (minMapValueEl && config.minMapValue !== undefined) {
+                minMapValueEl.value = config.minMapValue;
+            }
+            if (maxMapValueEl && config.maxMapValue !== undefined) {
+                maxMapValueEl.value = config.maxMapValue;
+            }
+            if (negativeColorEl && config.negativeColor !== undefined) {
+                negativeColorEl.value = config.negativeColor;
+            }
+            if (positiveColorEl && config.positiveColor !== undefined) {
+                positiveColorEl.value = config.positiveColor;
+            }
+            
+            // 更新颜色选择器的禁用状态和按钮状态
+            if (color1Input && color2Input) {
+                color1Input.disabled = this.isColorMappingEnabled;
+                color2Input.disabled = this.isColorMappingEnabled;
+            }
+            if (toggleBtn) {
+                toggleBtn.textContent = this.isColorMappingEnabled ? '关闭值映射' : '启用值映射';
+                toggleBtn.classList.toggle('active', this.isColorMappingEnabled);
+            }
+        }
+
         // 加载备注
         try {
             if (config.notes) {
@@ -293,7 +369,13 @@ class ViewerGroup {
             showPositive: this.showPositive,
             fileName1: this.fileName1,
             fileName2: this.fileName2,
-            notes: this.notesManager.getConfiguration()
+            notes: this.notesManager.getConfiguration(),
+            // 值映射相关配置
+            isColorMappingEnabled: this.isColorMappingEnabled,
+            minMapValue: document.getElementById(`minMapValue-${this.id}`)?.value || '-0.02',
+            maxMapValue: document.getElementById(`maxMapValue-${this.id}`)?.value || '0.03',
+            negativeColor: document.getElementById(`negativeColor-${this.id}`)?.value || '#0000FF',
+            positiveColor: document.getElementById(`positiveColor-${this.id}`)?.value || '#FF0000'
         };
     }
 
@@ -477,7 +559,7 @@ class ViewerGroup {
         }
 
         // 添加映射值和颜色变化的监听器
-        ['minMapValue', 'maxMapValue', 'negativeColor', 'positiveColor'].forEach(id => {
+        ['minMapValue', 'maxMapValue', 'negativeColor', 'positiveColor', 'gradientType'].forEach(id => {
             const element = document.getElementById(`${id}-${this.id}`);
             if (element) {
                 element.addEventListener('change', () => {
@@ -546,12 +628,13 @@ class ViewerGroup {
                 const positiveColor = document.getElementById(`positiveColor-${this.id}`).value;
 
                 // 使用 RDG 生成等值面，用 Sign(λ2)ρ 的值来映射颜色
+                const gradientType = document.getElementById(`gradientType-${this.id}`)?.value || "rwb";
                 this.viewer.addVolumetricData(this.currentData1, "cube", {
                     isoval: isoValue,
                     voldata: this.currentData2,
                     volformat: "cube",
                     volscheme: {
-                        gradient: "rwb",
+                        gradient: gradientType,
                         min: minValue,
                         max: maxValue,
                         mid: 0
@@ -817,17 +900,20 @@ class ViewerGroup {
                         </div>
 
                         <div class="control-group">
-                            <button class="btn screenshot-btn" onclick="viewerGroups[${this.id}].takeScreenshot()">
-                                截图
-                            </button>
-                        </div>
-                        <div class="control-group">
+                            <div class="button-row">
+                                <button class="btn screenshot-btn" onclick="viewerGroups[${this.id}].takeScreenshot()">
+                                    截图
+                                </button>
+                                <button class="btn" onclick="viewerGroups[${this.id}].copyViewState()">
+                                    复制视角
+                                </button>
+                            </div>
                             <div class="button-row">
                                 <button class="btn" onclick="viewerGroups[${this.id}].exportViewState()">
                                     导出视角
                                 </button>
                                 <button class="btn" onclick="viewerGroups[${this.id}].triggerViewStateImport()">
-                                    加载视角
+                                    导入视角
                                 </button>
                             </div>
                             <input type="file" 
@@ -913,6 +999,15 @@ class ViewerGroup {
                     </div>
                 </div>
                 <div class="mapping-colors">
+                    <div class="color-input">
+                        <label>渐变样式:</label>
+                        <select id="gradientType-${this.id}" style="width: 100%; padding: 4px;">
+                            <option value="rwb">RWB (红-白-蓝)</option>
+                            <option value="bwr">BWR (蓝-白-红)</option>
+                            <option value="roygb">ROYGB (彩虹)</option>
+                            <option value="sinebow">Sinebow (正弦彩虹)</option>
+                        </select>
+                    </div>
                     <div class="color-input">
                         <label>负值颜色:</label>
                         <input type="color" id="negativeColor-${this.id}" 
@@ -1000,6 +1095,19 @@ class ViewerGroup {
                 { selector: `#toggleCub2-${index}`, handler: `viewerGroups[${index}].toggleCub2()` },
                 { selector: `#toggleColorMap-${index}`, handler: `viewerGroups[${index}].toggleColorMapping()` }
             ];
+
+            // 更新视角相关按钮的 onclick（通过文本内容匹配）
+            const viewButtons = container.querySelectorAll('.btn');
+            viewButtons.forEach(btn => {
+                const text = btn.textContent.trim();
+                if (text === '复制视角') {
+                    btn.setAttribute('onclick', `viewerGroups[${index}].copyViewState()`);
+                } else if (text === '导出视角') {
+                    btn.setAttribute('onclick', `viewerGroups[${index}].exportViewState()`);
+                } else if (text === '导入视角') {
+                    btn.setAttribute('onclick', `viewerGroups[${index}].triggerViewStateImport()`);
+                }
+            });
 
             buttonHandlers.forEach(({ selector, handler }) => {
                 const btn = container.querySelector(selector);

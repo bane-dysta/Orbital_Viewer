@@ -11,6 +11,8 @@ from pathlib import Path
 from urllib.parse import unquote
 import logging
 import threading
+import subprocess
+import tempfile
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
 
@@ -516,6 +518,93 @@ class OrbitalViewerHandler(http.server.SimpleHTTPRequestHandler):
             
         except Exception as e:
             logging.error(f"处理请求时出错: {e}")
+            self.send_error(500, f"Internal Server Error: {str(e)}")
+
+    def do_POST(self):
+        """处理POST请求"""
+        try:
+            parsed_url = urllib.parse.urlparse(self.path)
+            path = parsed_url.path
+            
+            # 处理视角转换请求
+            if path == '/convert-view':
+                content_length = int(self.headers.get('Content-Length', 0))
+                post_data = self.rfile.read(content_length)
+                
+                try:
+                    view_data = json.loads(post_data.decode('utf-8'))
+                except json.JSONDecodeError as e:
+                    logging.error(f"解析视角数据失败: {e}")
+                    self.send_error(400, "Invalid JSON data")
+                    return
+                
+                try:
+                    # 获取3dmol2vmd.exe的路径
+                    script_dir = os.path.dirname(os.path.abspath(__file__))
+                    converter_path = os.path.join(script_dir, '3dmol2vmd.exe')
+                    
+                    # 如果exe不存在，尝试不带.exe扩展名（Linux/WSL）
+                    if not os.path.exists(converter_path):
+                        converter_path = os.path.join(script_dir, '3dmol2vmd')
+                    
+                    if not os.path.exists(converter_path):
+                        logging.error(f"3dmol2vmd工具未找到: {converter_path}")
+                        self.send_error(500, "3dmol2vmd converter not found")
+                        return
+                    
+                    # 创建临时JSON文件
+                    with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False, encoding='utf-8') as tmp_file:
+                        json.dump(view_data, tmp_file)
+                        tmp_file_path = tmp_file.name
+                    
+                    try:
+                        # 调用3dmol2vmd.exe
+                        try:
+                            result = subprocess.run(
+                                [converter_path, tmp_file_path],
+                                capture_output=True,
+                                text=True,
+                                timeout=10
+                            )
+                        except subprocess.TimeoutExpired:
+                            logging.error("3dmol2vmd转换超时")
+                            self.send_error(500, "Conversion timeout")
+                            return
+                        
+                        if result.returncode != 0:
+                            logging.error(f"3dmol2vmd转换失败: {result.stderr}")
+                            self.send_error(500, f"Conversion failed: {result.stderr}")
+                            return
+                        
+                        # 获取输出（3dmol2vmd.exe已经输出{{{...}}}格式）
+                        vmd_string = result.stdout.strip()
+                        
+                        # 返回结果
+                        self.send_response(200)
+                        self.send_header('Content-type', 'application/json')
+                        self.end_headers()
+                        response = json.dumps({'vmd_string': vmd_string})
+                        self.wfile.write(response.encode('utf-8'))
+                        logging.info(f"视角转换成功: {vmd_string[:50]}...")
+                        
+                    finally:
+                        # 清理临时文件
+                        try:
+                            os.unlink(tmp_file_path)
+                        except Exception as e:
+                            logging.warning(f"删除临时文件失败: {e}")
+                            
+                except Exception as e:
+                    logging.error(f"转换视角时出错: {e}")
+                    self.send_error(500, f"Conversion error: {str(e)}")
+                
+                return
+            
+            # 其他POST请求
+            self.send_error(404, "Not found")
+            
+        except Exception as e:
+            logging.error(f"处理POST请求时出错: {e}")
             self.send_error(500, f"Internal Server Error: {str(e)}")
 
     def send_file(self, filepath):
