@@ -10,7 +10,8 @@ a = Analysis(
         ('serve.py', '.'),               # 包含serve.py
         ('config_write.py', '.'),        # 包含config_write.py
         ('main.py', '.'),                # 包含main.py
-        ('static', 'static')             # 包含整个static目录
+        ('static', 'static'),           # 包含整个static目录
+        ('orbviewer', 'orbviewer')
     ],  
     hiddenimports=[],
     hookspath=[],
