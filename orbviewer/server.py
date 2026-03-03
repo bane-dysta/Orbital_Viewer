@@ -48,6 +48,7 @@ class ServerContext:
 
 class ThreadedHTTPServer(ThreadingMixIn, socketserver.TCPServer):
     allow_reuse_address = True
+    daemon_threads = True
 
 
 def _render_index_html(template: str, default_settings: Dict[str, Any], config_data: Optional[Dict[str, Any]] = None,
@@ -106,18 +107,21 @@ def make_handler(context: ServerContext):
             # Delegate to logging
             logger.info("%s - %s", self.address_string(), format % args)
 
-        def _send_bytes(self, data: bytes, content_type: str, status: int = 200) -> None:
+        def _send_bytes(self, data: bytes, content_type: str, status: int = 200, *, cache_control: str = "no-store") -> None:
             self.send_response(status)
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(data)))
+            self.send_header("Cache-Control", cache_control)
+            # Basic hardening
+            self.send_header("X-Content-Type-Options", "nosniff")
             self.end_headers()
             self.wfile.write(data)
 
         def _send_json(self, obj: Any, status: int = 200) -> None:
             data = json.dumps(obj).encode("utf-8")
-            self._send_bytes(data, "application/json", status=status)
+            self._send_bytes(data, "application/json", status=status, cache_control="no-store")
 
-        def _send_file(self, path: Path) -> None:
+        def _send_file(self, path: Path, *, cache_control: str = "no-store") -> None:
             # Stream file to client
             try:
                 if not path.exists() or not path.is_file():
@@ -128,14 +132,13 @@ def make_handler(context: ServerContext):
                 self.send_response(HTTPStatus.OK)
                 self.send_header("Content-Type", content_type)
                 self.send_header("Content-Length", str(path.stat().st_size))
+                self.send_header("Cache-Control", cache_control)
+                self.send_header("X-Content-Type-Options", "nosniff")
                 self.end_headers()
 
+                import shutil
                 with path.open("rb") as f:
-                    while True:
-                        chunk = f.read(64 * 1024)
-                        if not chunk:
-                            break
-                        self.wfile.write(chunk)
+                    shutil.copyfileobj(f, self.wfile, length=64 * 1024)
             except Exception as e:
                 logger.exception("发送文件失败: %s", e)
                 self.send_error(HTTPStatus.INTERNAL_SERVER_ERROR, "Failed to send file")
@@ -189,7 +192,7 @@ def make_handler(context: ServerContext):
                     if asset_path is None:
                         self.send_error(HTTPStatus.BAD_REQUEST, "Invalid path")
                         return
-                    self._send_file(asset_path)
+                    self._send_file(asset_path, cache_control="public, max-age=3600")
                     return
 
                 # User files (.cub/.cube/.json etc) served from serve_dir

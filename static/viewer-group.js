@@ -22,6 +22,9 @@ class ViewerGroup {
         this.gridVectors = [];
         this.currentVolumeId1 = null;
         this.currentVolumeId2 = null;
+        // 记录当前等值面（3Dmol 的 addVolumetricData/addIsosurface 生成的是 GLShape）
+        // 需要用 viewer.removeShape() 移除；否则旧等值面会残留，导致修改等值面值看似无效
+        this.isoShapes = [];
         this.title = `轨道组 ${id}`;
         this.uploadedFiles = [];
         this.fileName1 = '';
@@ -154,7 +157,7 @@ class ViewerGroup {
         }
     }
 
-    async initialize() {
+    initialize() {
         if (this.isInitialized) return;
 
         // 创建3Dmol查看器
@@ -171,21 +174,19 @@ class ViewerGroup {
 
         // 设置默认视图控制
         this.viewer.setStyle({}, {stick:{}, sphere:{}});
-        this.viewer.setClickable({}, true, function(atom){
-            console.log("Atom clicked: " + atom.elem + " " + atom.serial);
-        });
+        // 如需调试点击原子，可在这里打开日志
+        // this.viewer.setClickable({}, true, function(atom){
+        //     console.log("Atom clicked: " + atom.elem + " " + atom.serial);
+        // });
         this.viewer.render();
 
         this.setupEventListeners();
         this.setupDropZone();
         
         // 初始化备注管理器
-        await this.notesManager.initialize();
+        this.notesManager.initialize();
         
         this.isInitialized = true;
-
-        // 等待DOM更新
-        await new Promise(resolve => setTimeout(resolve, 100));
     }
 
     // 新增：切换 cub1 显示状态的方法
@@ -451,10 +452,15 @@ class ViewerGroup {
             file.name.endsWith('.cube') || file.name.endsWith('.cub')
         );
 
-        // 如果当前已有两个文件，则清空表重新开始
+        // 如果当前已有两个文件，则清空列表并重置显示
         if (this.uploadedFiles.length >= 2) {
-            console.log('文件列表已满，清空现有文件并重新加载');
             this.uploadedFiles = [];
+            this.currentData1 = null;
+            this.currentData2 = null;
+            this.atomList = [];
+            this.fileName1 = '';
+            this.fileName2 = '';
+            this.resetViewer();
         }
 
         // 加新文件
@@ -491,14 +497,12 @@ class ViewerGroup {
                     this.fileName2 = '';
                     this.currentData2 = null;
                     $(`#file2-label-${this.id}`).text('文件 2:');
-                    console.log('等待第二个文件...');
                 }
 
                 // 显示分子和轨道
+                this.resetViewer();
                 this.displayMolecule();
                 this.updateSurfaces();
-
-                console.log('文件已加载:', this.uploadedFiles.map(f => f.name));
             }
         } catch (error) {
             console.error('文件处理错误:', error);
@@ -572,10 +576,8 @@ class ViewerGroup {
     // 自动加载文件
     async autoLoadFiles() {
         try {
-            console.log('正在加载文件:', {
-                fileName1: this.fileName1,
-                fileName2: this.fileName2
-            });
+            // 加载配置时可能已经存在旧内容，先清理
+            this.resetViewer();
 
             // 加载第一个文件
             if (this.fileName1) {
@@ -603,88 +605,149 @@ class ViewerGroup {
                 this.updateSurfaces();
             }
 
-            console.log('文件加载成功');
         } catch (error) {
             console.error('文件加载错误:', error);
             this.showError(error.message);
         }
     }
+    // 清理等值面/分子图形（加载新文件时用）
+    resetViewer() {
+        if (!this.viewer) return;
+        try {
+            // 只清理视觉对象，不改变相机状态
+            if (typeof this.viewer.removeAllSurfaces === 'function') {
+                this.viewer.removeAllSurfaces();
+            }
+            if (typeof this.viewer.removeAllShapes === 'function') {
+                this.viewer.removeAllShapes();
+            } else if (typeof this.viewer.clear === 'function') {
+                // 兼容旧版本
+                this.viewer.clear();
+            }
 
-    // 更新表面
+            // reset 时一并清空等值面引用
+            this.isoShapes = [];
+        } catch (e) {
+            console.warn('resetViewer failed:', e);
+        }
+    }
+
+    // 更新表面（仅重建等值面，不重绘分子）
     updateSurfaces() {
         if (!this.viewer) return;
 
-        this.viewer.clear();
-        this.displayMolecule();
+        // 只移除已有等值面，保留分子结构/相机视角
+        // 注意：3Dmol 的 addVolumetricData/addIsosurface 生成的是 GLShape（存放在 viewer.shapes），
+        // 不能用 removeAllSurfaces() 来清理，否则旧等值面会残留，导致 isoval 修改无效。
+        if (typeof this.viewer.removeShape === 'function') {
+            if (Array.isArray(this.isoShapes) && this.isoShapes.length) {
+                for (const s of this.isoShapes) {
+                    try {
+                        this.viewer.removeShape(s);
+                    } catch (e) {
+                        // 忽略单个 shape 删除失败
+                    }
+                }
+            }
+            this.isoShapes = [];
+        } else {
+            // 极端兼容：没有 removeShape 时，只能清空重绘（会丢失分子，需要重绘）
+            const prevView = (typeof this.viewer.getView === 'function') ? this.viewer.getView() : null;
 
-        const isoValue = parseFloat(document.getElementById(`isoValue-${this.id}`).value);
+            if (typeof this.viewer.removeAllShapes === 'function') {
+                this.viewer.removeAllShapes();
+            } else if (typeof this.viewer.clear === 'function') {
+                this.viewer.clear();
+            }
 
-        if (this.currentData1) {
-            if (this.isColorMappingEnabled && this.currentData2) {
-                // 使用值映射模式
-                const minValue = parseFloat(document.getElementById(`minMapValue-${this.id}`).value);
-                const maxValue = parseFloat(document.getElementById(`maxMapValue-${this.id}`).value);
-                const negativeColor = document.getElementById(`negativeColor-${this.id}`).value;
-                const positiveColor = document.getElementById(`positiveColor-${this.id}`).value;
+            this.isoShapes = [];
+            this.displayMolecule();
 
-                // 使用 RDG 生成等值面，用 Sign(λ2)ρ 的值来映射颜色
-                const gradientType = document.getElementById(`gradientType-${this.id}`)?.value || "rwb";
-                this.viewer.addVolumetricData(this.currentData1, "cube", {
+            if (prevView && typeof this.viewer.setView === 'function') {
+                this.viewer.setView(prevView);
+            }
+        }
+
+        // 如果项目里还使用了传统 surface（viewer.surfaces），也顺手清理
+        if (typeof this.viewer.removeAllSurfaces === 'function') {
+            this.viewer.removeAllSurfaces();
+        }
+
+        const isoEl = document.getElementById(`isoValue-${this.id}`);
+        let isoValue = isoEl ? parseFloat(isoEl.value) : 0.002;
+        if (!Number.isFinite(isoValue)) isoValue = 0.002;
+
+        if (!this.currentData1) {
+            this.viewer.render();
+            return;
+        }
+
+        if (this.isColorMappingEnabled && this.currentData2) {
+            // 值映射模式：用 cub2 的值映射颜色，cub1 决定几何等值面
+            const minValue = parseFloat(document.getElementById(`minMapValue-${this.id}`)?.value ?? '-0.02');
+            const maxValue = parseFloat(document.getElementById(`maxMapValue-${this.id}`)?.value ?? '0.03');
+            const gradientType = document.getElementById(`gradientType-${this.id}`)?.value || 'rwb';
+
+            const shape = this.viewer.addVolumetricData(this.currentData1, 'cube', {
+                isoval: isoValue,
+                voldata: this.currentData2,
+                volformat: 'cube',
+                volscheme: {
+                    gradient: gradientType,
+                    min: minValue,
+                    max: maxValue,
+                    mid: 0
+                },
+                opacity: 0.85,
+                wireframe: false
+            });
+            if (shape) this.isoShapes.push(shape);
+        } else {
+            // 经典模式：分别显示 cub1/cub2 的正负等值面
+            if (this.showCub1) {
+                const s1 = this.viewer.addVolumetricData(this.currentData1, 'cube', {
                     isoval: isoValue,
-                    voldata: this.currentData2,
-                    volformat: "cube",
-                    volscheme: {
-                        gradient: gradientType,
-                        min: minValue,
-                        max: maxValue,
-                        mid: 0
-                    },
+                    color: this.color1,
                     opacity: 0.85,
-                    wireframe: false
+                    wireframe: false,
+                    origin: this.origin,
+                    dimensional: true
                 });
-            } else {
-                // 使用原来的显示模式
-                if (this.showCub1) {
-                    this.currentVolumeId1 = this.viewer.addVolumetricData(this.currentData1, "cube", {
-                        isoval: isoValue,
-                        color: this.color1,
-                        opacity: 0.85,
-                        wireframe: false,
-                        origin: this.origin,
-                        dimensional: true
-                    });
+                if (s1) this.isoShapes.push(s1);
 
-                    const negativeColor = this.getComplementaryColor(this.color1);
-                    this.viewer.addVolumetricData(this.currentData1, "cube", {
-                        isoval: -isoValue,
-                        color: negativeColor,
-                        opacity: 0.85,
-                        wireframe: false,
-                        origin: this.origin,
-                        dimensional: true
-                    });
-                }
+                const neg1 = this.getComplementaryColor(this.color1);
+                const s2 = this.viewer.addVolumetricData(this.currentData1, 'cube', {
+                    isoval: -isoValue,
+                    color: neg1,
+                    opacity: 0.85,
+                    wireframe: false,
+                    origin: this.origin,
+                    dimensional: true
+                });
+                if (s2) this.isoShapes.push(s2);
+            }
 
-                if (this.showCub2 && this.currentData2) {
-                    this.currentVolumeId2 = this.viewer.addVolumetricData(this.currentData2, "cube", {
-                        isoval: isoValue,
-                        color: this.color2,
-                        opacity: 0.85,
-                        wireframe: false,
-                        origin: this.origin,
-                        dimensional: true
-                    });
+            if (this.showCub2 && this.currentData2) {
+                const s3 = this.viewer.addVolumetricData(this.currentData2, 'cube', {
+                    isoval: isoValue,
+                    color: this.color2,
+                    opacity: 0.85,
+                    wireframe: false,
+                    origin: this.origin,
+                    dimensional: true
+                });
+                if (s3) this.isoShapes.push(s3);
 
-                    const negativeColor = this.getComplementaryColor(this.color2);
-                    this.viewer.addVolumetricData(this.currentData2, "cube", {
-                        isoval: -isoValue,
-                        color: negativeColor,
-                        opacity: 0.85,
-                        wireframe: false,
-                        origin: this.origin,
-                        dimensional: true
-                    });
-                }
+                const neg2 = this.getComplementaryColor(this.color2);
+                const s4 = this.viewer.addVolumetricData(this.currentData2, 'cube', {
+                    isoval: -isoValue,
+                    color: neg2,
+                    opacity: 0.85,
+                    wireframe: false,
+                    origin: this.origin,
+                    dimensional: true
+                });
+                if (s4) this.isoShapes.push(s4);
             }
         }
 
@@ -731,55 +794,78 @@ class ViewerGroup {
         document.body.appendChild(errorDiv);
         setTimeout(() => errorDiv.remove(), 3000);
     }
-
-    // 解析 Cube 文件
+    // 解析 Cube 文件（只解析头部+原子段，避免对整文件 split 导致的高内存/耗时）
     parseCubeFile(data) {
         try {
-            const lines = data.split('\n');
-            const tempAtomList = [];
+            if (typeof data !== 'string' || data.length === 0) return [];
 
-            // 解析原子数量
-            const natoms = Math.abs(parseInt(lines[2].trim().split(/\s+/)[0]));
-
-            // 解析原点坐标
-            const originLine = lines[2].trim().split(/\s+/);
-            this.origin = {
-                x: parseFloat(originLine[1]),
-                y: parseFloat(originLine[2]),
-                z: parseFloat(originLine[3])
+            let idx = 0;
+            const readLine = () => {
+                const next = data.indexOf('\n', idx);
+                if (next === -1) {
+                    const line = data.slice(idx).replace(/\r$/, '').trim();
+                    idx = data.length;
+                    return line;
+                }
+                const line = data.slice(idx, next).replace(/\r$/, '').trim();
+                idx = next + 1;
+                return line;
             };
 
-            // 解析网格向量
+            // 前两行通常是注释
+            readLine();
+            readLine();
+
+            // 第三行：原子数 + 原点坐标
+            const third = readLine();
+            const thirdParts = third.split(/\s+/);
+            const natoms = Math.abs(parseInt(thirdParts[0], 10)) || 0;
+
+            this.origin = {
+                x: parseFloat(thirdParts[1]) || 0,
+                y: parseFloat(thirdParts[2]) || 0,
+                z: parseFloat(thirdParts[3]) || 0
+            };
+
+            // 3 行网格向量
             this.gridVectors = [];
             for (let i = 0; i < 3; i++) {
-                const gridLine = lines[i + 3].trim().split(/\s+/);
+                const gridLine = readLine();
+                const p = gridLine.split(/\s+/);
                 this.gridVectors.push({
-                    nx: parseInt(gridLine[0]),
-                    x: parseFloat(gridLine[1]),
-                    y: parseFloat(gridLine[2]),
-                    z: parseFloat(gridLine[3])
+                    nx: parseInt(p[0], 10) || 0,
+                    x: parseFloat(p[1]) || 0,
+                    y: parseFloat(p[2]) || 0,
+                    z: parseFloat(p[3]) || 0
                 });
             }
 
-            // 解析原子坐标
+            // 原子段：只读取 natoms 行即可
             const bohrToAng = 0.529177;
+            const atoms = [];
             for (let i = 0; i < natoms; i++) {
-                const line = lines[i + 6].trim().split(/\s+/);
-                tempAtomList.push({
-                    elem: this.getElementSymbol(parseInt(line[0])),
-                    x: parseFloat(line[2]) * bohrToAng,
-                    y: parseFloat(line[3]) * bohrToAng,
-                    z: parseFloat(line[4]) * bohrToAng
+                const line = readLine();
+                if (!line) break;
+                const parts = line.split(/\s+/);
+                const atomicNumber = parseInt(parts[0], 10);
+
+                atoms.push({
+                    elem: this.getElementSymbol(atomicNumber),
+                    x: (parseFloat(parts[2]) || 0) * bohrToAng,
+                    y: (parseFloat(parts[3]) || 0) * bohrToAng,
+                    z: (parseFloat(parts[4]) || 0) * bohrToAng
                 });
             }
 
-            return tempAtomList;
+            return atoms;
         } catch (error) {
             console.error('解析 Cube 文件失败:', error);
             this.showError('Cube 文件格式错误');
             return [];
         }
     }
+
+
 
     // 获取元素符号
     getElementSymbol(atomicNumber) {
@@ -826,29 +912,84 @@ class ViewerGroup {
             });
         });
 
-        // 添加化学键
-        for (let i = 0; i < this.atomList.length; i++) {
-            for (let j = i + 1; j < this.atomList.length; j++) {
-                const atom1 = this.atomList[i];
-                const atom2 = this.atomList[j];
-                const distance = this.calculateDistance(atom1, atom2);
+        // 添加化学键（使用空间哈希，避免 O(n^2) 在大体系上卡顿）
+        const atoms = this.atomList;
+        if (atoms.length > 1) {
+            // 以本体系中最大的共价半径估计最大键长阈值，用于设置网格尺寸
+            let maxR = 0.76;
+            for (let i = 0; i < atoms.length; i++) {
+                const r = this.getCovalentRadius(atoms[i].elem);
+                if (r > maxR) maxR = r;
+            }
 
-                const radius1 = this.getCovalentRadius(atom1.elem);
-                const radius2 = this.getCovalentRadius(atom2.elem);
+            // 原逻辑：阈值 = (r1 + r2) * 1.3
+            const cellSize = Math.max(0.5, maxR * 2 * 1.3);
+            const grid = new Map();
+            const keyOf = (ix, iy, iz) => `${ix},${iy},${iz}`;
 
-                // 整键长判断标准，用共价半径之和的1.3倍作为阈值
-                if (distance < (radius1 + radius2) * 1.3) {
-                    // 根据原子大小调整键的粗细
-                    const bondRadius = Math.min(radius1, radius2) * 0.25;  // 键的径设较小原子半径的1/4
-                    
-                    this.viewer.addCylinder({
-                        start: { x: atom1.x, y: atom1.y, z: atom1.z },
-                        end: { x: atom2.x, y: atom2.y, z: atom2.z },
-                        radius: bondRadius,
-                        fromCap: true,
-                        toCap: true,
-                        color: 'lightgray'
-                    });
+            // 建立空间网格索引
+            for (let i = 0; i < atoms.length; i++) {
+                const a = atoms[i];
+                const ix = Math.floor(a.x / cellSize);
+                const iy = Math.floor(a.y / cellSize);
+                const iz = Math.floor(a.z / cellSize);
+                const k = keyOf(ix, iy, iz);
+                let bucket = grid.get(k);
+                if (!bucket) {
+                    bucket = [];
+                    grid.set(k, bucket);
+                }
+                bucket.push(i);
+            }
+
+            // 只检查相邻 27 个网格
+            for (let i = 0; i < atoms.length; i++) {
+                const a1 = atoms[i];
+                const ix = Math.floor(a1.x / cellSize);
+                const iy = Math.floor(a1.y / cellSize);
+                const iz = Math.floor(a1.z / cellSize);
+
+                const r1 = this.getCovalentRadius(a1.elem);
+
+                for (let dx = -1; dx <= 1; dx++) {
+                    for (let dy = -1; dy <= 1; dy++) {
+                        for (let dz = -1; dz <= 1; dz++) {
+                            const bucket = grid.get(keyOf(ix + dx, iy + dy, iz + dz));
+                            if (!bucket) continue;
+
+                            for (let bi = 0; bi < bucket.length; bi++) {
+                                const j = bucket[bi];
+                                if (j <= i) continue;
+
+                                const a2 = atoms[j];
+                                const r2 = this.getCovalentRadius(a2.elem);
+
+                                const maxDist = (r1 + r2) * 1.3;
+                                // 快速排除：如果某一轴差值已经超过 maxDist，就不必算平方根
+                                const dxp = a1.x - a2.x;
+                                if (Math.abs(dxp) > maxDist) continue;
+                                const dyp = a1.y - a2.y;
+                                if (Math.abs(dyp) > maxDist) continue;
+                                const dzp = a1.z - a2.z;
+                                if (Math.abs(dzp) > maxDist) continue;
+
+                                const distance = Math.sqrt(dxp * dxp + dyp * dyp + dzp * dzp);
+                                if (distance < maxDist) {
+                                    // 根据原子大小调整键的粗细
+                                    const bondRadius = Math.min(r1, r2) * 0.25;
+
+                                    this.viewer.addCylinder({
+                                        start: { x: a1.x, y: a1.y, z: a1.z },
+                                        end: { x: a2.x, y: a2.y, z: a2.z },
+                                        radius: bondRadius,
+                                        fromCap: true,
+                                        toCap: true,
+                                        color: 'lightgray'
+                                    });
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -1143,13 +1284,7 @@ class ViewerGroup {
 
     updateColorMapping() {
         if (!this.isColorMappingEnabled) return;
-        
-        const minValue = parseFloat(document.getElementById(`minMapValue-${this.id}`).value);
-        const maxValue = parseFloat(document.getElementById(`maxMapValue-${this.id}`).value);
-        const negativeColor = document.getElementById(`negativeColor-${this.id}`).value;
-        const positiveColor = document.getElementById(`positiveColor-${this.id}`).value;
-
-        // 更新表面显示
+        // 配置变化后直接重绘等值面即可
         this.updateSurfaces();
     }
 }
