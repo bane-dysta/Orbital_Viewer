@@ -1,8 +1,10 @@
 build/
 dist/
-test/
+view/
 3Dmol-min.js
 jquery.min.js
 *.exe
 __pycache__
 *.pyc
+tar
+*.tgz

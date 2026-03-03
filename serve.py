@@ -539,13 +539,16 @@ class OrbitalViewerHandler(http.server.SimpleHTTPRequestHandler):
                     return
                 
                 try:
-                    # 获取3dmol2vmd.exe的路径
-                    script_dir = os.path.dirname(os.path.abspath(__file__))
-                    converter_path = os.path.join(script_dir, '3dmol2vmd.exe')
+                    # 获取3dmol2vmd.exe的路径：打包后优先使用可执行文件所在目录
+                    if getattr(sys, 'frozen', False):
+                        base_dir = os.path.dirname(sys.executable)
+                    else:
+                        base_dir = os.path.dirname(os.path.abspath(__file__))
+                    converter_path = os.path.join(base_dir, '3dmol2vmd.exe')
                     
                     # 如果exe不存在，尝试不带.exe扩展名（Linux/WSL）
                     if not os.path.exists(converter_path):
-                        converter_path = os.path.join(script_dir, '3dmol2vmd')
+                        converter_path = os.path.join(base_dir, '3dmol2vmd')
                     
                     if not os.path.exists(converter_path):
                         logging.error(f"3dmol2vmd工具未找到: {converter_path}")
